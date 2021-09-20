@@ -355,7 +355,7 @@ class Fit:
         if "success_errn" in result:
             result["fit_results"] &= result["success_errn"] & result["success_errp"]
             del result["success_errn"]
-            del result["fit_results"]
+            del result["success_errp"]
         elif "success" in result:
             result["fit_results"] &= result["success"]
             del result["success"]
