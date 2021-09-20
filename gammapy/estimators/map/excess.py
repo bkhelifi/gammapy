@@ -106,6 +106,7 @@ class ExcessMapEstimator(Estimator):
         Spectral model used for the computation of the flux map.
         If None, a Power Law of index 2 is assumed (default).
 
+
     Examples
     --------
     >>> from gammapy.datasets import MapDataset
