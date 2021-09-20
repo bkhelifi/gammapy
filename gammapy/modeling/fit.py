@@ -350,6 +350,16 @@ class Fit:
 
         result["errp"] *= parameter.scale
         result["errn"] *= parameter.scale
+
+        result["fit_results"] = True
+        if "success_errn" in result:
+            result["fit_results"] &= result["success_errn"] & result["success_errp"]
+            del result["success_errn"]
+            del result["fit_results"]
+        elif "success" in result:
+            result["fit_results"] &= result["success"]
+            del result["success"]
+
         return result
 
     def stat_profile(self, datasets, parameter, reoptimize=False):
