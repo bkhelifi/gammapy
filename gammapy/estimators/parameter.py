@@ -82,17 +82,20 @@ class ParameterEstimator(Estimator):
                 * parameter.name_err: covariance-based error estimate on parameter value
         """
         value, total_stat, success, error = np.nan, 0.0, False, np.nan
+        # value, total_stat, success, message, error = np.nan, 0, False, "", np.nan
 
         if np.any(datasets.contributes_to_stat):
             result = self.fit.run(datasets=datasets)
             value, error = parameter.value, parameter.error
             total_stat = result.optimize_result.total_stat
             success = result.success
+            # message = result["optimize_result"].message
 
         return {
             f"{parameter.name}": value,
             "stat": total_stat,
             "success": success,
+            # "message": message,
             f"{parameter.name}_err": error * self.n_sigma,
         }
 
@@ -126,15 +129,22 @@ class ParameterEstimator(Estimator):
             # compute ts value
             parameter.value = self.null_value
 
+            success = True
+            # message, success = "Not Applicable", True
             if self.reoptimize:
                 parameter.frozen = True
-                _ = self.fit.optimize(datasets=datasets)
+                res = self.fit.optimize(datasets=datasets)
+                # message = res.message
+                success = res.success
 
             ts = datasets.stat_sum() - stat
 
         return {
             "ts": ts,
             "npred": npred["npred"],
+            "npred_null": npred_null["npred"],
+            "success_err": success,
+            # "message_ts": message,
         }
 
     def estimate_errn_errp(self, datasets, parameter):
@@ -169,10 +179,10 @@ class ParameterEstimator(Estimator):
             sigma=self.n_sigma,
             reoptimize=self.reoptimize,
         )
-
         return {
             f"{parameter.name}_errp": res["errp"],
             f"{parameter.name}_errn": res["errn"],
+            "success_err": res["success_errn"] & res["success_errp"],
         }
 
     def estimate_scan(self, datasets, parameter):
@@ -206,10 +216,17 @@ class ParameterEstimator(Estimator):
         profile = self.fit.stat_profile(
             datasets=datasets, parameter=parameter, reoptimize=self.reoptimize
         )
+        success = True
+        for res in profile["fit_results"]:
+            success &= res
+            if res is False:
+                log.warning(f"Failed to make the parameter scan for {parameter.name}")
 
         return {
             f"{parameter.name}_scan": scan_values,
             "stat_scan": profile["stat_scan"],
+            "success_err": success,
+            "success_scan": profile["fit_results"],
         }
 
     def estimate_ul(self, datasets, parameter):
@@ -240,7 +257,10 @@ class ParameterEstimator(Estimator):
             sigma=self.n_sigma_ul,
             reoptimize=self.reoptimize,
         )
-        return {f"{parameter.name}_ul": res["errp"] + parameter.value}
+        return {
+            f"{parameter.name}_ul": res["errp"] + parameter.value,
+            "success_err": res["success_errn"] & res["success_errp"],
+        }
 
     @staticmethod
     def estimate_counts(datasets):
@@ -263,7 +283,10 @@ class ParameterEstimator(Estimator):
             mask = dataset.mask
             counts.append(dataset.counts.data[mask].sum())
 
-        return {"counts": np.array(counts, dtype=int), "datasets": datasets.names}
+        return {
+            "counts": np.array(counts, dtype=int),
+            "datasets": datasets.names,
+        }
 
     @staticmethod
     def estimate_npred(datasets):
@@ -286,7 +309,10 @@ class ParameterEstimator(Estimator):
             mask = dataset.mask
             npred.append(dataset.npred().data[mask].sum())
 
-        return {"npred": np.array(npred), "datasets": datasets.names}
+        return {
+            "npred": np.array(npred),
+            "datasets": datasets.names,
+        }
 
     def run(self, datasets, parameter):
         """Run the parameter estimator.
@@ -305,6 +331,7 @@ class ParameterEstimator(Estimator):
         """
         datasets = Datasets(datasets)
         parameter = datasets.parameters[parameter]
+        result = {}
 
         with datasets.parameters.restore_status():
 
@@ -312,7 +339,7 @@ class ParameterEstimator(Estimator):
                 datasets.parameters.freeze_all()
                 parameter.frozen = False
 
-            result = self.estimate_best_fit(datasets, parameter)
+            result.update(self.estimate_best_fit(datasets, parameter))
             result.update(self.estimate_ts(datasets, parameter))
 
             if "errn-errp" in self.selection_optional:
@@ -325,4 +352,17 @@ class ParameterEstimator(Estimator):
                 result.update(self.estimate_scan(datasets, parameter))
 
         result.update(self.estimate_counts(datasets))
+
+        result["fit_status"] = int(result["success"])
+        if "success_err" in result:
+            result["fit_status"] += int(result["success_err"])
+            del result["success_err"]
+            if "scan" in self.selection_optional:
+                if False in result["success_scan"]:
+                    result["fit_status"] = 1
+                    del result["fit_status"]
+
+        # Temporary DEBUG for this draft
+        if result["fit_status"] > 2:
+            print("\nBKH> LOGIC ERROR fit_status=", result["fit_status"])
         return result
