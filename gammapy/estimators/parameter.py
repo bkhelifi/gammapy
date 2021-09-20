@@ -182,7 +182,7 @@ class ParameterEstimator(Estimator):
         return {
             f"{parameter.name}_errp": res["errp"],
             f"{parameter.name}_errn": res["errn"],
-            "success_err": res["success_errn"] & res["success_errp"],
+            "success_err": res["fit_results"],
         }
 
     def estimate_scan(self, datasets, parameter):
@@ -257,9 +257,10 @@ class ParameterEstimator(Estimator):
             sigma=self.n_sigma_ul,
             reoptimize=self.reoptimize,
         )
+
         return {
             f"{parameter.name}_ul": res["errp"] + parameter.value,
-            "success_err": res["success_errn"] & res["success_errp"],
+            "success_err": res["fit_results"],
         }
 
     @staticmethod
@@ -357,7 +358,7 @@ class ParameterEstimator(Estimator):
         if "success_err" in result:
             result["fit_status"] += int(result["success_err"])
             del result["success_err"]
-            if "scan" in self.selection_optional:
+            if "scan" in self.selection_optional and "success_scan" in result:
                 if False in result["success_scan"]:
                     result["fit_status"] = 1
                     del result["fit_status"]
