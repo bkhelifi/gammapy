@@ -711,12 +711,12 @@ class FluxMaps:
     @property
     def eflux_err(self):
         """Return energy flux (eflux) SED errors."""
-        return _filter_convergence_failure(self.norm_err * self.eflux_ref, status=2)
+        return self._filter_convergence_failure(self.norm_err * self.eflux_ref, status=2)
 
     @property
     def eflux_errn(self):
         """Return energy flux (eflux) SED negative errors."""
-        return _filter_convergence_failure(self.norm_errn * self.eflux_ref, status=2)
+        return self._filter_convergence_failure(self.norm_errn * self.eflux_ref, status=2)
 
     @property
     def eflux_errp(self):
