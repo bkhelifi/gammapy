@@ -738,6 +738,10 @@ class FluxMaps:
         """Put NaN where pixels did not converge."""
         if not self.has_fit_status:
             return some_map
+        # For integer content, NaN is not defined
+        if not np.asanyarray(some_map.data).dtype is np.dtype(float):
+            return some_map
+
         some_map.data[~(self.fit_status.data >= status)] = np.nan
         return some_map
 
