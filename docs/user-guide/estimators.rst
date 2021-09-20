@@ -68,6 +68,7 @@ sqrt_ts           Square root of ts time sign(norm), in case of one degree of fr
 npred             Predicted counts of the best fit hypothesis. Equivalent to correlated counts for backward folding
 npred_excess      Predicted excess counts of the best fit hypothesis. Equivalent to correlated excess for backward folding
 npred_background  Predicted background counts of the best fit hypothesis. Equivalent to correlated excess for backward folding
+fit_status        Status of the estimation: 0=failed, 1=success of the quantity estimation, 2=success of the estimation of the quantity and its error
 ================= =================================================
 
 In addition, the following optional quantities can be computed:
@@ -193,7 +194,7 @@ This is how to compute flux points:
     # this will run a joint fit of the datasets
     fp = estimator.run(datasets)
     table = fp.to_table(sed_type="dnde", formatted=True)
-    # print(table[["e_ref", "dnde", "dnde_err"]])
+    # print(table[["e_ref", "dnde", "dnde_err", "fit_status"]])
 
     # or stack the datasets
     # fp = estimator.run(datasets.stack_reduce())
