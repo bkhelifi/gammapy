@@ -80,6 +80,7 @@ VALID_QUANTITIES = [
     "is_ul",
     "counts",
     "success",
+    # "fit_status"
 ]
 
 
@@ -94,6 +95,7 @@ OPTIONAL_QUANTITIES_COMMON = [
     "is_ul",
     "counts",
     "success",
+    # "fit_status"
 ]
 
 
@@ -129,6 +131,8 @@ class FluxMaps:
         * ts : optional, the delta TS associated with the flux value.
         * sqrt_ts : optional, the square root of the TS, when relevant.
         * success : optional, a boolean tagging the validity of the estimation
+        # * fit_status: optional, integer with the fit status (0: not converged, \
+        #     1: converged for the flux, 2: converged for the flux and its errors)
     reference_model : `~gammapy.modeling.models.SkyModel`, optional
         The reference model to use for conversions. If None, a model consisting
         of a point source with a power law spectrum of index 2 is assumed.
@@ -256,6 +260,11 @@ class FluxMaps:
         return "stat_scan" in self._data
 
     @property
+    def has_fit_status(self):
+        """Whether the flux estimate has the fit status"""
+        return "success" in self.available_quantities
+
+    @property
     def has_success(self):
         """Whether the flux estimate has the fit status"""
         return "success" in self._data
@@ -370,7 +379,9 @@ class FluxMaps:
     def niter(self):
         """Number of iterations of fit"""
         self._check_quantity("niter")
+        # As debugging info, we keep the returned value
         return self._data["niter"]
+        # return self._filter_convergence_failure(self._data["niter"])
 
     @property
     def success(self):
@@ -381,6 +392,9 @@ class FluxMaps:
     @property
     def is_ul(self):
         """Whether data is an upper limit"""
+        if "is_ul" in self._data:
+            return self._filter_convergence_failure(self._data["is_ul"])
+
         # TODO: make this a well defined behaviour
         is_ul = self.norm.copy(data=False)
 
@@ -393,7 +407,7 @@ class FluxMaps:
         else:
             is_ul.data = np.isnan(self.norm)
 
-        return is_ul
+        return self._filter_convergence_failure(is_ul)
 
     @is_ul.setter
     def is_ul(self, value):
@@ -411,7 +425,7 @@ class FluxMaps:
 
     @property
     def counts(self):
-        """Predicted counts null hypothesis"""
+        """Counts"""
         self._check_quantity("counts")
         return self._data["counts"]
 
@@ -479,30 +493,34 @@ class FluxMaps:
     def stat_scan(self):
         """Fit statistic scan value"""
         self._check_quantity("stat_scan")
+        # We do not put NaN when a stat_scan fails
         return self._data["stat_scan"]
+        # return self._filter_convergence_failure(self._data["stat_scan"])
 
     @property
     def stat(self):
         """Fit statistic value"""
         self._check_quantity("stat")
-        return self._data["stat"]
+        return self._filter_convergence_failure(self._data["stat"])
 
     @property
     def stat_null(self):
         """Fit statistic value for the null hypothesis"""
         self._check_quantity("stat_null")
-        return self._data["stat_null"]
+        return self._filter_convergence_failure(self._data["stat_null"])
 
     @property
     def ts(self):
         """ts map (`Map`)"""
         self._check_quantity("ts")
-        return self._data["ts"]
+        return self._filter_convergence_failure(self._data["ts"])
 
     @property
     def ts_scan(self):
         """ts scan (`Map`)"""
+        # We do not put NaN when a stat_scan fails
         return self.stat_scan - np.expand_dims(self.stat.data, 2)
+        # return self._filter_convergence_failure(self.stat_scan - np.expand_dims(self.stat.data, 2))
 
     # TODO: always derive sqrt(TS) from TS?
     @property
@@ -524,12 +542,12 @@ class FluxMaps:
             sqrt(TS) map
         """
         if "sqrt_ts" in self._data:
-            return self._data["sqrt_ts"]
+            return self._filter_convergence_failure(self._data["sqrt_ts"])
         else:
             with np.errstate(invalid="ignore", divide="ignore"):
                 ts = np.clip(self.ts.data, 0, None)
                 data = np.where(self.norm > 0, np.sqrt(ts), -np.sqrt(ts))
-                return Map.from_geom(geom=self.geom, data=data)
+                return self._filter_convergence_failure(Map.from_geom(geom=self.geom, data=data))
 
     @property
     def norm(self):
@@ -541,24 +559,25 @@ class FluxMaps:
         """Norm error"""
         self._check_quantity("norm_err")
         return self._filter_convergence_failure(self._data["norm_err"])
+        # return self._filter_convergence_failure(self._data["norm_err"], status=2) BKH
 
     @property
     def norm_errn(self):
         """Negative norm error"""
         self._check_quantity("norm_errn")
-        return self._data["norm_errn"]
+        return self._filter_convergence_failure(self._data["norm_errn"], status=2)
 
     @property
     def norm_errp(self):
         """Positive norm error"""
         self._check_quantity("norm_errp")
-        return self._data["norm_errp"]
+        return self._filter_convergence_failure(self._data["norm_errp"], status=2)
 
     @property
     def norm_ul(self):
         """Norm upper limit"""
         self._check_quantity("norm_ul")
-        return self._data["norm_ul"]
+        return self._filter_convergence_failure(self._data["norm_ul"], status=2)
 
     @property
     def dnde_ref(self):
@@ -603,101 +622,124 @@ class FluxMaps:
     def dnde(self):
         """Return differential flux (dnde) SED values."""
         return self._use_center_as_labels(self.norm * self.dnde_ref)
+        # return self._filter_convergence_failure(self.norm * self.dnde_ref) BKH
 
     @property
     def dnde_err(self):
         """Return differential flux (dnde) SED errors."""
         return self._use_center_as_labels(self.norm_err * self.dnde_ref)
+        # return self._filter_convergence_failure(self.norm_err * self.dnde_ref, status=2) BKH
 
     @property
     def dnde_errn(self):
         """Return differential flux (dnde) SED negative errors."""
         return self._use_center_as_labels(self.norm_errn * self.dnde_ref)
+        # return self._filter_convergence_failure(self.norm_errn * self.dnde_ref, status=2) BKH
 
     @property
     def dnde_errp(self):
         """Return differential flux (dnde) SED positive errors."""
         return self._use_center_as_labels(self.norm_errp * self.dnde_ref)
+        # return self._filter_convergence_failure(self.norm_errp * self.dnde_ref, status=2) BKH
 
     @property
     def dnde_ul(self):
         """Return differential flux (dnde) SED upper limit."""
         return self._use_center_as_labels(self.norm_ul * self.dnde_ref)
+        # return self._filter_convergence_failure(self.norm_ul * self.dnde_ref, status=2) BKH
 
     @property
     def e2dnde(self):
         """Return differential energy flux (e2dnde) SED values."""
         return self._use_center_as_labels(self.norm * self.e2dnde_ref)
+        # return self._filter_convergence_failure(self.norm * self.e2dnde_ref) BKH
 
     @property
     def e2dnde_err(self):
         """Return differential energy flux (e2dnde) SED errors."""
         return self._use_center_as_labels(self.norm_err * self.e2dnde_ref)
+        # return self._filter_convergence_failure(self.norm_err * self.e2dnde_ref, status=2) BKH
 
     @property
     def e2dnde_errn(self):
         """Return differential energy flux (e2dnde) SED negative errors."""
         return self._use_center_as_labels(self.norm_errn * self.e2dnde_ref)
+        # return self._filter_convergence_failure(self.norm_errn * self.e2dnde_ref, status=2) BKH
 
     @property
     def e2dnde_errp(self):
         """Return differential energy flux (e2dnde) SED positive errors."""
         return self._use_center_as_labels(self.norm_errp * self.e2dnde_ref)
+        # return self._filter_convergence_failure(self.norm_errp * self.e2dnde_ref,2) BKH
 
     @property
     def e2dnde_ul(self):
         """Return differential energy flux (e2dnde) SED upper limit."""
         return self._use_center_as_labels(self.norm_ul * self.e2dnde_ref)
+        # return self._filter_convergence_failure(self.norm_ul * self.e2dnde_ref, status=2) BKH
 
     @property
     def flux(self):
         """Return integral flux (flux) SED values."""
-        return self.norm * self.flux_ref
+        return self._filter_convergence_failure(self.norm * self.flux_ref)
 
     @property
     def flux_err(self):
         """Return integral flux (flux) SED values."""
-        return self.norm_err * self.flux_ref
+        return self._filter_convergence_failure(self.norm_err * self.flux_ref, status=2)
 
     @property
     def flux_errn(self):
         """Return integral flux (flux) SED negative errors."""
-        return self.norm_errn * self.flux_ref
+        return self._filter_convergence_failure(self.norm_errn * self.flux_ref, status=2)
 
     @property
     def flux_errp(self):
         """Return integral flux (flux) SED positive errors."""
-        return self.norm_errp * self.flux_ref
+        return self._filter_convergence_failure(self.norm_errp * self.flux_ref, status=2)
 
     @property
     def flux_ul(self):
         """Return integral flux (flux) SED upper limits."""
-        return self.norm_ul * self.flux_ref
+        return self._filter_convergence_failure(self.norm_ul * self.flux_ref, status=2)
 
     @property
     def eflux(self):
         """Return energy flux (eflux) SED values."""
-        return self.norm * self.eflux_ref
+        return self._filter_convergence_failure(self.norm * self.eflux_ref)
 
     @property
     def eflux_err(self):
         """Return energy flux (eflux) SED errors."""
-        return self.norm_err * self.eflux_ref
+        return _filter_convergence_failure(self.norm_err * self.eflux_ref, status=2)
 
     @property
     def eflux_errn(self):
         """Return energy flux (eflux) SED negative errors."""
-        return self.norm_errn * self.eflux_ref
+        return _filter_convergence_failure(self.norm_errn * self.eflux_ref, status=2)
 
     @property
     def eflux_errp(self):
         """Return energy flux (eflux) SED positive errors."""
-        return self.norm_errp * self.eflux_ref
+        return self._filter_convergence_failure(self.norm_errp * self.eflux_ref, status=2)
 
     @property
     def eflux_ul(self):
         """Return energy flux (eflux) SED upper limits."""
-        return self.norm_ul * self.eflux_ref
+        return self._filter_convergence_failure(self.norm_ul * self.eflux_ref, status=2)
+
+    @property
+    def fit_status(self):
+        """Fit statistic value"""
+        self._check_quantity("fit_status")
+        return self._data["fit_status"]
+
+    def _filter_convergence_failure(self, some_map, status=1):
+        """Put NaN where pixels did not converge."""
+        if not self.has_fit_status:
+            return some_map
+        some_map.data[~(self.fit_status.data >= status)] = np.nan
+        return some_map
 
     def _filter_convergence_failure(self, some_map):
         """Put NaN where pixels did not converge."""
