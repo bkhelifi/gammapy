@@ -814,9 +814,6 @@ class BrentqFluxEstimator(Estimator):
         if "errn-errp" in self.selection_optional:
             result.update(self.estimate_errn_errp(dataset, result))
 
-        if "fit_status" in self.selection_optional:
-            result.update(result["fit_status"])
-
         return result
 
 
