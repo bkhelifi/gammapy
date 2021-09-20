@@ -358,11 +358,13 @@ class ParameterEstimator(Estimator):
         result["fit_status"] = int(result["success"])
         if result["fit_status"] > 0 and "success_err" in result:
             result["fit_status"] += int(result["success_err"])
-            del result["success_err"]
             if "scan" in self.selection_optional and "success_scan" in result:
                 if False in result["success_scan"]:
                     result["fit_status"] = 1
-                    del result["fit_status"]
+        if "success_err" in result:
+            del result["success_err"]
+        if "success_scan" in result:
+            del result["success_scan"]
 
         # Temporary DEBUG for this draft
         if result["fit_status"] > 2:
