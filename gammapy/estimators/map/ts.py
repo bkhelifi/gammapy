@@ -211,6 +211,7 @@ class TSMapEstimator(Estimator, parallel.ParallelMixin):
             "stat",
             "stat_null",
             "success",
+            # "fit_status", BKH
         ]
 
         if "errn-errp" in self.selection_optional:
@@ -476,6 +477,10 @@ class TSMapEstimator(Estimator, parallel.ParallelMixin):
                 * flux : flux map
                 * flux_err : symmetric error map
                 * flux_ul : upper limit map
+                * success : success (Boolean) map
+                * fit_status : map of the fit status (0=failed, 1=success of the quantity estimation, 2=success of the\
+                estimation of te quantity and its error
+                * errn-errp, ul : optional maps
 
         """
         if dataset.stat_type != "cash":
@@ -595,7 +600,7 @@ class SimpleMapDataset:
 class BrentqFluxEstimator(Estimator):
     """Single parameter flux estimator"""
 
-    _available_selection_optional = ["errn-errp", "ul"]
+    _available_selection_optional = ["errn-errp", "ul", "success", "fit_status"]
     tag = "BrentqFluxEstimator"
 
     def __init__(
@@ -630,6 +635,7 @@ class BrentqFluxEstimator(Estimator):
         # Compute norm bounds and assert counts > 0
         norm_min, norm_max, norm_min_total = dataset.norm_bounds
 
+        success, fit_status = True, 0
         if not dataset.counts.sum() > 0:
             norm, niter, success = norm_min_total, 0, True
 
@@ -649,11 +655,15 @@ class BrentqFluxEstimator(Estimator):
                     norm = max(result_fit[0], norm_min_total)
                     niter = result_fit[1].iterations
                     success = result_fit[1].converged
+                    # success &= result_fit[1].converged BKH
+                    # fit_status += int(result_fit[1].converged)
                 except (RuntimeError, ValueError):
                     norm, niter, success = norm_min_total, self.max_niter, False
 
         with np.errstate(invalid="ignore", divide="ignore"):
             norm_err = np.sqrt(1 / dataset.stat_2nd_derivative(norm)) * self.n_sigma
+            if success and np.isfinite(norm_err):
+                fit_status += 1
 
         stat = dataset.stat_sum(norm=norm)
         stat_null = dataset.stat_sum(norm=0)
@@ -666,6 +676,7 @@ class BrentqFluxEstimator(Estimator):
             "stat": stat,
             "stat_null": stat_null,
             "success": success,
+            # "fit_status": fit_status, BKH
         }
 
     def _confidence(self, dataset, n_sigma, result, positive):
@@ -752,9 +763,11 @@ class BrentqFluxEstimator(Estimator):
             Result dict including 'norm', 'norm_err' and "niter"
         """
         norm = dataset.norm_guess
-
+        fit_status = 1
         with np.errstate(invalid="ignore", divide="ignore"):
             norm_err = np.sqrt(1 / dataset.stat_2nd_derivative(norm)) * self.n_sigma
+            if np.isfinite(norm_err):
+                fit_status += 1
 
         stat = dataset.stat_sum(norm=norm)
         stat_null = dataset.stat_sum(norm=0)
@@ -767,6 +780,7 @@ class BrentqFluxEstimator(Estimator):
             "stat": stat,
             "stat_null": stat_null,
             "success": True,
+            # "fit_status": fit_status, BKH
         }
 
     def run(self, dataset):
@@ -782,6 +796,7 @@ class BrentqFluxEstimator(Estimator):
         result : dict
             Result dict
         """
+
         if self.ts_threshold is not None:
             result = self.estimate_default(dataset)
             if result["ts"] > self.ts_threshold:
@@ -798,6 +813,9 @@ class BrentqFluxEstimator(Estimator):
 
         if "errn-errp" in self.selection_optional:
             result.update(self.estimate_errn_errp(dataset, result))
+
+        if "fit_status" in self.selection_optional:
+            result.update(result["fit_status"])
 
         return result
 
