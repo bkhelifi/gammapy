@@ -118,10 +118,12 @@ class ParameterEstimator(Estimator):
                 * "npred" : predicted number of counts per dataset
         """
         npred = self.estimate_npred(datasets=datasets)
+        success = True
 
         if not np.any(datasets.contributes_to_stat):
             stat = np.nan
             npred["npred"][...] = np.nan
+            success = False
         else:
             stat = datasets.stat_sum()
 
@@ -129,13 +131,12 @@ class ParameterEstimator(Estimator):
             # compute ts value
             parameter.value = self.null_value
 
-            success = True
             # message, success = "Not Applicable", True
             if self.reoptimize:
                 parameter.frozen = True
                 res = self.fit.optimize(datasets=datasets)
                 # message = res.message
-                success = res.success
+                success &= res.success
 
             ts = datasets.stat_sum() - stat
 
@@ -355,7 +356,7 @@ class ParameterEstimator(Estimator):
         result.update(self.estimate_counts(datasets))
 
         result["fit_status"] = int(result["success"])
-        if "success_err" in result:
+        if result["fit_status"] > 0 and "success_err" in result:
             result["fit_status"] += int(result["success_err"])
             del result["success_err"]
             if "scan" in self.selection_optional and "success_scan" in result:
