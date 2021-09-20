@@ -540,10 +540,15 @@ class Fit:
         x = result["x"] * x.scale
         y = result["y"] * y.scale
 
+        fit_results = 0
+        if result["success"]:
+            fit_results = 2
+
         return {
             name_x: x,
             name_y: y,
             "success": result["success"],
+            # "fit_results": fit_results, BKH
         }
 
 
