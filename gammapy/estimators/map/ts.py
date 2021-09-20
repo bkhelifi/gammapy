@@ -479,7 +479,7 @@ class TSMapEstimator(Estimator, parallel.ParallelMixin):
                 * flux_ul : upper limit map
                 * success : success (Boolean) map
                 * fit_status : map of the fit status (0=failed, 1=success of the quantity estimation, 2=success of the\
-                estimation of te quantity and its error
+                estimation of the quantity and its error)
                 * errn-errp, ul : optional maps
 
         """
