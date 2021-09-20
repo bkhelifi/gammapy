@@ -392,9 +392,10 @@ class Fit:
                     parameter.frozen = True
                     result = self.optimize(datasets=datasets)
                     stat = result.total_stat
-                    fit_results.append(result)
+                    fit_results.append(result.success)
                 else:
                     stat = datasets.stat_sum()
+                    fit_results.append(True)
                 stats.append(stat)
 
         idx = datasets.parameters.index(parameter)
@@ -403,7 +404,7 @@ class Fit:
         return {
             f"{name}_scan": values,
             "stat_scan": np.array(stats),
-            "fit_results": fit_results,
+            "fit_results": np.array(fit_results),
         }
 
     def stat_surface(self, datasets, x, y, reoptimize=False):
@@ -453,9 +454,10 @@ class Fit:
                     x.frozen, y.frozen = True, True
                     result = self.optimize(datasets=datasets)
                     stat = result.total_stat
-                    fit_results.append(result)
+                    fit_results.append(result.success)
                 else:
                     stat = datasets.stat_sum()
+                    fit_results.append(True)
 
                 stats.append(stat)
 
