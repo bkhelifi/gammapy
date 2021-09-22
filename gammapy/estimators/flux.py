@@ -52,6 +52,8 @@ class FluxEstimator(ParameterEstimator):
     reoptimize : bool
         Re-optimize other free model parameters. Default is False.
         If True the available free parameters are fitted together with the norm of the source of interest in each bin independently, otherwise they are frozen at their current values.
+    full_output: bool
+        Print the messages of all fitters. Default is False
     """
 
     tag = "FluxEstimator"
@@ -68,6 +70,7 @@ class FluxEstimator(ParameterEstimator):
         selection_optional=None,
         fit=None,
         reoptimize=False,
+        full_output=False #BKH
     ):
         self.norm_values = norm_values
         self.norm_min = norm_min
@@ -81,6 +84,7 @@ class FluxEstimator(ParameterEstimator):
             selection_optional=selection_optional,
             fit=fit,
             reoptimize=reoptimize,
+            full_output=full_output #BKH
         )
 
     def _set_norm_parameter(self, norm=None, scaled_parameter=None):
