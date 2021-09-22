@@ -81,6 +81,7 @@ class TSMapEstimator(Estimator, parallel.ParallelMixin):
         Which maps to compute besides TS, sqrt(TS), flux and symmetric error on flux.
         Available options are:
 
+            * "full_output": keep all messages for each estimation
             * "all": all the optional steps are executed
             * "errn-errp": estimate asymmetric error on flux.
             * "ul": estimate upper limits on flux.
@@ -204,14 +205,14 @@ class TSMapEstimator(Estimator, parallel.ParallelMixin):
         selection = [
             "ts",
             "norm",
-            "niter",
             "norm_err",
             "npred",
             "npred_excess",
             "stat",
             "stat_null",
             "success",
-            # "fit_status", BKH
+            "fit_status", #BKH
+            "ncalls",
         ]
 
         if "errn-errp" in self.selection_optional:
@@ -547,11 +548,12 @@ class SimpleMapDataset:
 
     """
 
-    def __init__(self, model, counts, background, norm_guess):
+    def __init__(self, model, counts, background, norm_guess, name=None):
         self.model = model
         self.counts = counts
         self.background = background
         self.norm_guess = norm_guess
+        self.name = name
 
     @lazyproperty
     def norm_bounds(self):
@@ -582,7 +584,7 @@ class SimpleMapDataset:
         return (term_top / term_bottom)[~mask].sum()
 
     @classmethod
-    def from_arrays(cls, counts, background, exposure, norm, position, kernel):
+    def from_arrays(cls, counts, background, exposure, norm, position, kernel, name=None):
         """"""
         counts_cutout = _extract_array(counts, kernel.shape, position)
         background_cutout = _extract_array(background, kernel.shape, position)
@@ -593,6 +595,7 @@ class SimpleMapDataset:
             background=background_cutout,
             model=kernel * exposure_cutout,
             norm_guess=norm_guess,
+            name=name
         )
 
 
@@ -600,7 +603,7 @@ class SimpleMapDataset:
 class BrentqFluxEstimator(Estimator):
     """Single parameter flux estimator"""
 
-    _available_selection_optional = ["errn-errp", "ul", "success", "fit_status"]
+    _available_selection_optional = ["errn-errp", "ul", "success", "fit_status", "ncalls"]
     tag = "BrentqFluxEstimator"
 
     def __init__(
@@ -635,7 +638,7 @@ class BrentqFluxEstimator(Estimator):
         # Compute norm bounds and assert counts > 0
         norm_min, norm_max, norm_min_total = dataset.norm_bounds
 
-        success, fit_status = True, 0
+        success, fit_status, message = True, 0, ""
         if not dataset.counts.sum() > 0:
             norm, niter, success = norm_min_total, 0, True
 
@@ -657,8 +660,10 @@ class BrentqFluxEstimator(Estimator):
                     success = result_fit[1].converged
                     # success &= result_fit[1].converged BKH
                     # fit_status += int(result_fit[1].converged)
+                    # message = f"Succeed to compute the norm for dataset [{dataset.name}] "
                 except (RuntimeError, ValueError):
                     norm, niter, success = norm_min_total, self.max_niter, False
+                    # message = f"Failed to compute the norm for dataset [{dataset.name}] "
 
         with np.errstate(invalid="ignore", divide="ignore"):
             norm_err = np.sqrt(1 / dataset.stat_2nd_derivative(norm)) * self.n_sigma
@@ -671,12 +676,13 @@ class BrentqFluxEstimator(Estimator):
         return {
             "norm": norm,
             "norm_err": norm_err,
-            "niter": niter,
+            "ncalls": niter,
             "ts": stat_null - stat,
             "stat": stat,
             "stat_null": stat_null,
             "success": success,
-            # "fit_status": fit_status, BKH
+            "fit_status": fit_status, #BKH
+            "message": message,
         }
 
     def _confidence(self, dataset, n_sigma, result, positive):
@@ -696,18 +702,39 @@ class BrentqFluxEstimator(Estimator):
             max_norm = norm
             factor = -1
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            roots, res = find_roots(
-                ts_diff,
-                [min_norm],
-                [max_norm],
-                nbin=1,
-                maxiter=self.max_niter,
-                rtol=self.rtol,
-            )
-            # Where the root finding fails NaN is set as norm
-            return (roots[0] - norm) * factor
+        try:
+            roots, res, ncalls = find_roots(
+                    ts_diff,
+                    [min_norm],
+                    [max_norm],
+                    nbin=1,
+                    maxiter=self.max_niter,
+                    rtol=self.rtol,
+                )
+            return {
+                "value": (roots[0] - norm) * factor,
+                "ncalls": ncalls[0],
+                "message": f"Succeed to compute the confidence around norm={norm}. ",
+            }
+        except Exception as e:
+            return {
+                "value": np.nan,
+                "ncalls": -1,
+                "message": f"Failed to compute the confidence around norm={norm}. ",
+            }
+
+# with warnings.catch_warnings():
+        #     warnings.simplefilter("ignore")
+        #     roots, res = find_roots(
+        #         ts_diff,
+        #         [min_norm],
+        #         [max_norm],
+        #         nbin=1,
+        #         maxiter=self.max_niter,
+        #         rtol=self.rtol,
+        #     )
+        #     # Where the root finding fails NaN is set as norm
+        #     return (roots[0] - norm) * factor
 
     def estimate_ul(self, dataset, result):
         """Compute upper limit using likelihood profile method.
@@ -722,11 +749,16 @@ class BrentqFluxEstimator(Estimator):
         result : dict
             Result dict including 'norm_ul'
         """
-        flux_ul = result["norm"] + self._confidence(
+        res = self._confidence(
             dataset=dataset, n_sigma=self.n_sigma_ul, result=result, positive=True
         )
+        flux_ul = result["norm"] + res["value"]
 
-        return {"norm_ul": flux_ul}
+        return {
+            "norm_ul": flux_ul,
+            # "ncalls": ncalls,
+            "message_ul": res["message"],
+        }
 
     def estimate_errn_errp(self, dataset, result):
         """Compute norm errors using likelihood profile method.
@@ -741,13 +773,20 @@ class BrentqFluxEstimator(Estimator):
         result : dict
             Result dict including 'norm_errp' and 'norm_errn'
         """
-        flux_errn = self._confidence(
+        res_errn = self._confidence(
             dataset=dataset, result=result, n_sigma=self.n_sigma, positive=False
         )
-        flux_errp = self._confidence(
+        res_errp = self._confidence(
             dataset=dataset, result=result, n_sigma=self.n_sigma, positive=True
         )
-        return {"norm_errn": flux_errn, "norm_errp": flux_errp}
+        return {
+            "norm_errn": res_errn["value"],
+            "norm_errp": res_errp["value"],
+            "message_errn": res_errn["message"],
+            "message_errp": res_errp["message"],
+            # "ncalls_errn": res_errn["ncalls"],
+            # "ncalls_errp": res_errp["ncalls"],
+        }
 
     def estimate_default(self, dataset):
         """Estimate default norm
@@ -760,7 +799,7 @@ class BrentqFluxEstimator(Estimator):
         Returns
         -------
         result : dict
-            Result dict including 'norm', 'norm_err' and "niter"
+            Result dict including 'norm', 'norm_err' and "ncalls"
         """
         norm = dataset.norm_guess
         fit_status = 1
@@ -775,12 +814,13 @@ class BrentqFluxEstimator(Estimator):
         return {
             "norm": norm,
             "norm_err": norm_err,
-            "niter": 0,
+            "ncalls": 1,
             "ts": stat_null - stat,
             "stat": stat,
             "stat_null": stat_null,
             "success": True,
-            # "fit_status": fit_status, BKH
+            "fit_status": fit_status,
+            "message": f"Default estimation of the norm succeeded for dataset [{dataset.name}]" #BKH
         }
 
     def run(self, dataset):
@@ -814,10 +854,20 @@ class BrentqFluxEstimator(Estimator):
         if "errn-errp" in self.selection_optional:
             result.update(self.estimate_errn_errp(dataset, result))
 
+        if "full_output" in self.selection_optional:
+            log.info(result["message"])
+        for method in AVAILABLE_METHODS:
+            if "message_{method}" not in result:
+                continue
+            if "full_output" not in self.selection_optional:
+                del result[f"message_{method}"]
+            else:
+                log.info(result[f"message_{method}"])
+
         return result
 
 
-def _ts_value(position, counts, exposure, background, kernel, norm, flux_estimator):
+def _ts_value(position, counts, exposure, background, kernel, norm, flux_estimator, name=None):
     """Compute TS value at a given pixel position.
 
     Uses approach described in Stewart (2009).
@@ -837,6 +887,8 @@ def _ts_value(position, counts, exposure, background, kernel, norm, flux_estimat
     norm : `~numpy.ndarray`
         Norm image. The flux value at the given pixel position is used as
         starting value for the minimization.
+    name : str
+        Name of the associated Dataset (optional)
 
     Returns
     -------
@@ -850,5 +902,6 @@ def _ts_value(position, counts, exposure, background, kernel, norm, flux_estimat
         kernel=kernel,
         position=position,
         norm=norm,
+        name=None,
     )
     return flux_estimator.run(dataset)
