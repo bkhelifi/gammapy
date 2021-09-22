@@ -79,6 +79,7 @@ def _confidence_scipy_brentq(
     message, success = "Confidence terminated successfully.", True
     kwargs.setdefault("nbin", 1)
 
+    success = True
     roots, res = find_roots(
         ts_diff.fcn, lower_bound=lower_bound, upper_bound=upper_bound, **kwargs
     )
