@@ -85,6 +85,7 @@ def _confidence_scipy_brentq(
     result = (roots[0], res[0])
 
     if np.isnan(roots[0]):
+    # if np.isnan(roots[0]) or "converged" not in res[0].flag:
         message = (
             "Confidence estimation failed. Try to set the parameter.min/max by hand."
         )
@@ -173,4 +174,7 @@ def stat_profile_ul_scipy(
     roots, res = find_roots(
         f, lower_bound=norm_best_fit, upper_bound=value_scan[-1], nbin=1, **kwargs
     )
-    return roots[0]
+    ul = roots[0]
+    if "converged" not in res[0].flag:
+        ul = np.nan
+    return ul
