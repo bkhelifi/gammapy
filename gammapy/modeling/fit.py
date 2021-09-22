@@ -234,6 +234,11 @@ class Fit:
             unique_names = np.array(datasets.models.parameters_unique_names)[idx]
             trace.rename_columns(trace.colnames[1:], list(unique_names))
 
+        info["ncalls"] = 0
+        if "nfev" in info:
+            info["ncalls"] = int(info["nfev"])
+            del info["nfev"]
+
         # Copy final results into the parameters object
         parameters.set_parameter_factors(factors)
         parameters.check_limits()
@@ -295,7 +300,6 @@ class Fit:
         if optimize_result:
             optimize_result.models.covariance = matrix.data.copy()
 
-        # TODO: decide what to return, and fill the info correctly!
         return CovarianceResult(
             backend=backend,
             method=method,
@@ -328,7 +332,7 @@ class Fit:
         Returns
         -------
         result : dict
-            Dictionary with keys "errp", 'errn", "success" and "nfev".
+            Dictionary with keys "errp", 'errn", "success" and "ncalls".
         """
         datasets, parameters = self._parse_datasets(datasets=datasets)
 
@@ -359,6 +363,13 @@ class Fit:
         elif "success" in result:
             result["fit_results"] &= result["success"]
             del result["success"]
+
+        if "nfev_errn" in result:
+            result["ncalls_errn"] = result["nfev_errn"]
+            del result["nfev_errn"]
+        if "nfev_errp" in result:
+            result["ncalls_errp"] = result["nfev_errp"]
+            del result["nfev_errp"]
 
         return result
 
@@ -395,6 +406,7 @@ class Fit:
 
         stats = []
         fit_results = []
+        message = []
         with parameters.restore_status():
             for value in progress_bar(values, desc="Scan values"):
                 parameter.value = value
@@ -403,9 +415,11 @@ class Fit:
                     result = self.optimize(datasets=datasets)
                     stat = result.total_stat
                     fit_results.append(result.success)
+                    message.append(f"{result.message} for [{parameter.name}={value}] | ")
                 else:
                     stat = datasets.stat_sum()
                     fit_results.append(True)
+                    message.append(f"Succeed to compute the fit statistic profile for [{parameter.name}={value}] | ")
                 stats.append(stat)
 
         idx = datasets.parameters.index(parameter)
@@ -415,6 +429,7 @@ class Fit:
             f"{name}_scan": values,
             "stat_scan": np.array(stats),
             "fit_results": np.array(fit_results),
+            "message_prof": message,
         }
 
     def stat_surface(self, datasets, x, y, reoptimize=False):
@@ -453,7 +468,7 @@ class Fit:
 
         stats = []
         fit_results = []
-
+        message = []
         with parameters.restore_status():
             for x_value, y_value in progress_bar(
                 itertools.product(x.scan_values, y.scan_values), desc="Trial values"
@@ -465,9 +480,11 @@ class Fit:
                     result = self.optimize(datasets=datasets)
                     stat = result.total_stat
                     fit_results.append(result.success)
+                    message.append(f"'{result.message}' to compute the fit surface for [{x_value}, {y_value}]")
                 else:
                     stat = datasets.stat_sum()
                     fit_results.append(True)
+                    message.append(f"Succeed to compute the fit surface for [{x_value}, {y_value}]")
 
                 stats.append(stat)
 
@@ -486,6 +503,7 @@ class Fit:
             f"{name_y}_scan": y.scan_values,
             "stat_scan": stats,
             "fit_results": fit_results,
+            "message_surf": message,
         }
 
     def stat_contour(self, datasets, x, y, numpoints=10, sigma=1):
@@ -544,11 +562,13 @@ class Fit:
         if result["success"]:
             fit_results = 2
 
+        print(result)
         return {
             name_x: x,
             name_y: y,
             "success": result["success"],
-            # "fit_results": fit_results, BKH
+            "fit_results": fit_results, #BKH
+            "message_cont": result["message"]
         }
 
 
@@ -596,7 +616,16 @@ class CovarianceResult(FitStepResult):
 
     def __init__(self, matrix=None, **kwargs):
         self._matrix = matrix
-        super().__init__(**kwargs)
+    super().__init__(**kwargs)
+
+
+# class OptimizeResult(FitResult):   BKH
+#     """Optimize result object."""
+#
+#     def __init__(self, ncalls, total_stat, trace, **kwargs):
+#         self._ncalls = int(ncalls)
+#         self._total_stat = total_stat
+        self._trace = trace
 
     @property
     def matrix(self):
@@ -636,9 +665,9 @@ class OptimizeResult(FitStepResult):
         return self._trace
 
     @property
-    def nfev(self):
+    def ncalls(self):
         """Number of function evaluations."""
-        return self._nfev
+        return self._ncalls
 
     @property
     def total_stat(self):
@@ -748,4 +777,6 @@ class FitResult:
         if self.covariance_result:
             str_ += str(self.covariance_result)
 
+        # str_ += f"\tncalls     : {self.ncalls}\n" BKH
+        # str_ += f"\ttotal stat : {self.total_stat:.2f}\n"
         return str_
