@@ -69,6 +69,7 @@ npred             Predicted counts of the best fit hypothesis. Equivalent to cor
 npred_excess      Predicted excess counts of the best fit hypothesis. Equivalent to correlated excess for backward folding
 npred_background  Predicted background counts of the best fit hypothesis. Equivalent to correlated excess for backward folding
 fit_status        Status of the estimation: 0=failed, 1=success of the quantity estimation, 2=success of the estimation of the quantity and its error
+ncalls            Number of iterations used to estimate the norm
 ================= =================================================
 
 In addition, the following optional quantities can be computed:
