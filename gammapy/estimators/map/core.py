@@ -76,13 +76,12 @@ VALID_QUANTITIES = [
     "stat",
     "stat_scan",
     "stat_null",
-    "niter",
+    "ncalls",
     "is_ul",
     "counts",
     "success",
     # "fit_status"
 ]
-
 
 OPTIONAL_QUANTITIES_COMMON = [
     "ts",
@@ -91,7 +90,7 @@ OPTIONAL_QUANTITIES_COMMON = [
     "npred_excess",
     "stat",
     "stat_null",
-    "niter",
+    "ncalls",
     "is_ul",
     "counts",
     "success",
@@ -376,12 +375,11 @@ class FluxMaps:
 
     # TODO: keep or remove?
     @property
-    def niter(self):
+    def ncalls(self):
         """Number of iterations of fit"""
-        self._check_quantity("niter")
+        self._check_quantity("ncalls")
         # As debugging info, we keep the returned value
-        return self._data["niter"]
-        # return self._filter_convergence_failure(self._data["niter"])
+        return self._data["ncalls"]
 
     @property
     def success(self):
@@ -495,7 +493,6 @@ class FluxMaps:
         self._check_quantity("stat_scan")
         # We do not put NaN when a stat_scan fails
         return self._data["stat_scan"]
-        # return self._filter_convergence_failure(self._data["stat_scan"])
 
     @property
     def stat(self):
@@ -520,7 +517,6 @@ class FluxMaps:
         """ts scan (`Map`)"""
         # We do not put NaN when a stat_scan fails
         return self.stat_scan - np.expand_dims(self.stat.data, 2)
-        # return self._filter_convergence_failure(self.stat_scan - np.expand_dims(self.stat.data, 2))
 
     # TODO: always derive sqrt(TS) from TS?
     @property
@@ -547,7 +543,7 @@ class FluxMaps:
             with np.errstate(invalid="ignore", divide="ignore"):
                 ts = np.clip(self.ts.data, 0, None)
                 data = np.where(self.norm > 0, np.sqrt(ts), -np.sqrt(ts))
-                return self._filter_convergence_failure(Map.from_geom(geom=self.geom, data=data))
+                return Map.from_geom(geom=self.geom, data=data)
 
     @property
     def norm(self):
@@ -681,52 +677,52 @@ class FluxMaps:
     @property
     def flux(self):
         """Return integral flux (flux) SED values."""
-        return self._filter_convergence_failure(self.norm * self.flux_ref)
+        return self.norm * self.flux_ref
 
     @property
     def flux_err(self):
         """Return integral flux (flux) SED values."""
-        return self._filter_convergence_failure(self.norm_err * self.flux_ref, status=2)
+        return self.norm_err * self.flux_ref
 
     @property
     def flux_errn(self):
         """Return integral flux (flux) SED negative errors."""
-        return self._filter_convergence_failure(self.norm_errn * self.flux_ref, status=2)
+        return self.norm_errn * self.flux_ref
 
     @property
     def flux_errp(self):
         """Return integral flux (flux) SED positive errors."""
-        return self._filter_convergence_failure(self.norm_errp * self.flux_ref, status=2)
+        return self.norm_errp * self.flux_ref
 
     @property
     def flux_ul(self):
         """Return integral flux (flux) SED upper limits."""
-        return self._filter_convergence_failure(self.norm_ul * self.flux_ref, status=2)
+        return self.norm_ul * self.flux_ref
 
     @property
     def eflux(self):
         """Return energy flux (eflux) SED values."""
-        return self._filter_convergence_failure(self.norm * self.eflux_ref)
+        return self.norm * self.eflux_ref
 
     @property
     def eflux_err(self):
         """Return energy flux (eflux) SED errors."""
-        return self._filter_convergence_failure(self.norm_err * self.eflux_ref, status=2)
+        return self.norm_err * self.eflux_ref
 
     @property
     def eflux_errn(self):
         """Return energy flux (eflux) SED negative errors."""
-        return self._filter_convergence_failure(self.norm_errn * self.eflux_ref, status=2)
+        return self.norm_errn * self.eflux_ref
 
     @property
     def eflux_errp(self):
         """Return energy flux (eflux) SED positive errors."""
-        return self._filter_convergence_failure(self.norm_errp * self.eflux_ref, status=2)
+        return self.norm_errp * self.eflux_ref
 
     @property
     def eflux_ul(self):
         """Return energy flux (eflux) SED upper limits."""
-        return self._filter_convergence_failure(self.norm_ul * self.eflux_ref, status=2)
+        return self.norm_ul * self.eflux_ref
 
     @property
     def fit_status(self):
