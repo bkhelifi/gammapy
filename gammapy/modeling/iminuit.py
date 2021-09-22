@@ -170,13 +170,25 @@ def contour_iminuit(parameters, function, x, y, numpoints, sigma, **kwargs):
     idx_y = parameters.free_parameters.index(par_y)
     y = _make_parname(idx_y, par_y)
 
+<<<<<<< HEAD
     cl = chi2(2).cdf(sigma**2)
     contour = minuit.mncontour(x=x, y=y, size=numpoints, cl=cl)
     # TODO: add try and except to get the success
+=======
+    x_info, y_info, contour = minuit.mncontour(x, y, numpoints, sigma)
+    contour = np.array(contour)
+
+    success = x_info["is_valid"] and y_info["is_valid"]
+    if success:
+        message = f"mncontour succeeds for [{par_x.name},{par_y.name}]"
+    else:
+        message = f"mncontour fails for [{par_x.name},{par_y.name}]"
+
     return {
         "success": True,
         "x": contour[:, 0],
         "y": contour[:, 1],
+        "message": message,
     }
 
 
