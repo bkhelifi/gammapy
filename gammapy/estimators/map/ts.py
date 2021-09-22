@@ -703,7 +703,7 @@ class BrentqFluxEstimator(Estimator):
             factor = -1
 
         try:
-            roots, res, ncalls = find_roots(
+            roots, res = find_roots(
                     ts_diff,
                     [min_norm],
                     [max_norm],
@@ -711,30 +711,21 @@ class BrentqFluxEstimator(Estimator):
                     maxiter=self.max_niter,
                     rtol=self.rtol,
                 )
+            value = (roots[0] - norm) * factor
+            if "converged" not in res[0].flag:
+                value = np.nan
+
             return {
-                "value": (roots[0] - norm) * factor,
-                "ncalls": ncalls[0],
+                "value": value,
+                "ncalls": res[0].iterations,
                 "message": f"Succeed to compute the confidence around norm={norm}. ",
             }
         except Exception as e:
             return {
                 "value": np.nan,
                 "ncalls": -1,
-                "message": f"Failed to compute the confidence around norm={norm}. ",
+                "message": f"Failed to compute the confidence around norm={norm}: {e} ",
             }
-
-# with warnings.catch_warnings():
-        #     warnings.simplefilter("ignore")
-        #     roots, res = find_roots(
-        #         ts_diff,
-        #         [min_norm],
-        #         [max_norm],
-        #         nbin=1,
-        #         maxiter=self.max_niter,
-        #         rtol=self.rtol,
-        #     )
-        #     # Where the root finding fails NaN is set as norm
-        #     return (roots[0] - norm) * factor
 
     def estimate_ul(self, dataset, result):
         """Compute upper limit using likelihood profile method.
@@ -758,6 +749,7 @@ class BrentqFluxEstimator(Estimator):
             "norm_ul": flux_ul,
             # "ncalls": ncalls,
             "message_ul": res["message"],
+            "success_ul": np.isfinite(flux_ul),
         }
 
     def estimate_errn_errp(self, dataset, result):
@@ -786,6 +778,7 @@ class BrentqFluxEstimator(Estimator):
             "message_errp": res_errp["message"],
             # "ncalls_errn": res_errn["ncalls"],
             # "ncalls_errp": res_errp["ncalls"],
+            "success_err": np.isfinite(res_errn["value"]) & np.isfinite(res_errp["value"]),
         }
 
     def estimate_default(self, dataset):
@@ -848,11 +841,17 @@ class BrentqFluxEstimator(Estimator):
         result["npred"] = dataset.npred(norm=norm).sum()
         result["npred_excess"] = result["npred"] - dataset.npred(norm=0).sum()
 
+        other_success = True
         if "ul" in self.selection_optional:
             result.update(self.estimate_ul(dataset, result))
+            other_success &= result["success_ul"]
 
         if "errn-errp" in self.selection_optional:
             result.update(self.estimate_errn_errp(dataset, result))
+            other_success &= result["success_ul"]
+
+        if result["fit_status"] >= 1 and not other_success:
+            result["fit_status"] = 1
 
         if "full_output" in self.selection_optional:
             log.info(result["message"])
