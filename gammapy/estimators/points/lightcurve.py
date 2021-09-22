@@ -15,6 +15,14 @@ __all__ = ["LightCurveEstimator"]
 
 log = logging.getLogger(__name__)
 
+REQUIRED_QUANTITIES = [
+    "counts",
+    "npred",
+    "npred_null",
+    "fit_status",
+    "ncalls",
+]
+
 
 class LightCurveEstimator(FluxPointsEstimator):
     """Estimate light curve.
@@ -56,6 +64,7 @@ class LightCurveEstimator(FluxPointsEstimator):
     selection_optional : list of str
         Which steps to execute. Available options are:
 
+            * "full_output": keep all messages for each estimation
             * "all": all the optional steps are executed
             * "errn-errp": estimate asymmetric errors.
             * "ul": estimate upper limits.
@@ -189,6 +198,7 @@ class LightCurveEstimator(FluxPointsEstimator):
         result = Map.from_geom(geom, data=np.nan)
 
         coords = m.geom.get_coord(sparse=True)
+        # The following function does not keep the unit of the input data. To be changed?
         result.set_by_coord(coords, vals=m.data)
         return result
 
