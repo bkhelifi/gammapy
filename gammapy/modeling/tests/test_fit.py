@@ -177,7 +177,7 @@ def test_optimize(backend):
     assert_allclose(pars["y"].value, 3e2, rtol=1e-3)
     assert_allclose(pars["z"].value, 4e-2, rtol=1e-2)
 
-    assert len(result.trace) == result.nfev
+    assert len(result.trace) == result.ncalls
 
 
 # TODO: add some extra covariance tests, in addition to run
@@ -241,9 +241,6 @@ def test_stat_profile_reoptimize():
 
     assert_allclose(result["test.model.x_scan"], [0, 2, 4], atol=1e-7)
     assert_allclose(result["stat_scan"], [4, 0, 4], atol=1e-7)
-    # assert_allclose(
-    #     result["fit_results"][0].total_stat, result["stat_scan"][0], atol=1e-7
-    # )
     assert len(result["fit_results"]) == 3
 
 
@@ -297,9 +294,6 @@ def test_stat_surface_reoptimize():
     ]
 
     assert_allclose(list(result["stat_scan"]), expected_stat, atol=1e-7)
-    # assert_allclose(
-    #     result["fit_results"][0][0].total_stat, result["stat_scan"][0][0], atol=1e-7
-    # )
 
 
 def test_stat_contour():
