@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 def make_map_exposure_true_energy(
-    pointing, livetime, aeff, geom, use_region_center=True
+    pointing, livetime, aeff, geom, use_region_center=True, energy_weight=1.
 ):
     """Compute exposure map.
 
@@ -46,6 +46,8 @@ def make_map_exposure_true_energy(
         If geom is a RegionGeom, whether to just
         consider the values at the region center
         or the instead the average over the whole region
+    energy_weight : float
+        Energy scale
 
     Returns
     -------
@@ -58,7 +60,7 @@ def make_map_exposure_true_energy(
         coords, weights = geom.get_coord(sparse=True), None
 
     offset = coords.skycoord.separation(pointing)
-    exposure = aeff.evaluate(offset=offset, energy_true=coords["energy_true"])
+    exposure = aeff.evaluate(offset=offset, energy_true=coords["energy_true"]*energy_weight)
 
     data = (exposure * livetime).to("m2 s")
     meta = {"livetime": livetime, "is_pointlike": aeff.is_pointlike}
@@ -197,7 +199,7 @@ def make_map_background_irf(
     return bkg_map
 
 
-def make_psf_map(psf, pointing, geom, exposure_map=None):
+def make_psf_map(psf, pointing, geom, exposure_map=None, energy_weight=1.):
     """Make a psf map for a single observation
 
     Expected axes : rad and true energy in this specific order
@@ -215,6 +217,8 @@ def make_psf_map(psf, pointing, geom, exposure_map=None):
     exposure_map : `~gammapy.maps.Map`, optional
         the associated exposure map.
         default is None
+    energy_weight : float
+        Energy scale
 
     Returns
     -------
@@ -228,7 +232,7 @@ def make_psf_map(psf, pointing, geom, exposure_map=None):
 
     # Compute PSF values
     data = psf.evaluate(
-        energy_true=coords["energy_true"],
+        energy_true=coords["energy_true"]*energy_weight,
         offset=offset,
         rad=coords["rad"],
     )
@@ -239,8 +243,8 @@ def make_psf_map(psf, pointing, geom, exposure_map=None):
     return PSFMap(psf_map, exposure_map)
 
 
-def make_edisp_map(edisp, pointing, geom, exposure_map=None, use_region_center=True):
-    """Make a edisp map for a single observation
+def make_edisp_map(edisp, pointing, geom, exposure_map=None, use_region_center=True, energy_weight=1.):
+    """Make an edisp map for a single observation
 
     Expected axes : migra and true energy in this specific order
     The name of the migra MapAxis is expected to be 'migra'
@@ -260,7 +264,9 @@ def make_edisp_map(edisp, pointing, geom, exposure_map=None, use_region_center=T
     use_region_center: Bool
         If geom is a RegionGeom, whether to just
         consider the values at the region center
-        or the instead the average over the whole region
+        or the instead of the average over the whole region
+    energy_weight : float
+        Energy scale
 
     Returns
     -------
@@ -278,7 +284,7 @@ def make_edisp_map(edisp, pointing, geom, exposure_map=None, use_region_center=T
     # Compute EDisp values
     data = edisp.evaluate(
         offset=offset,
-        energy_true=coords["energy_true"],
+        energy_true=coords["energy_true"]*energy_weight,
         migra=coords["migra"],
     )
 
@@ -292,7 +298,7 @@ def make_edisp_map(edisp, pointing, geom, exposure_map=None, use_region_center=T
 
 
 def make_edisp_kernel_map(
-    edisp, pointing, geom, exposure_map=None, use_region_center=True
+    edisp, pointing, geom, exposure_map=None, use_region_center=True, energy_weight=1.
 ):
     """Make a edisp kernel map for a single observation
 
@@ -316,6 +322,8 @@ def make_edisp_kernel_map(
         If geom is a RegionGeom, whether to just
         consider the values at the region center
         or the instead the average over the whole region
+    energy_weight : float
+        Energy scale
 
     Returns
     -------
@@ -329,7 +337,7 @@ def make_edisp_kernel_map(
     new_geom = geom.to_image().to_cube([migra_axis, geom.axes["energy_true"]])
 
     edisp_map = make_edisp_map(
-        edisp, pointing, new_geom, exposure_map, use_region_center
+        edisp, pointing, new_geom, exposure_map, use_region_center, energy_weight
     )
 
     return edisp_map.to_edisp_kernel_map(geom.axes["energy"])
