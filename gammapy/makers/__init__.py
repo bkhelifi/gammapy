@@ -12,7 +12,7 @@ from .background import (
     WobbleRegionsFinder,
 )
 
-from .map import MapDatasetMaker
+from .map import MapDatasetMaker, HessMapDatasetMaker
 from .reduce import DatasetsMaker
 from .safe import SafeMaskMaker
 from .spectrum import SpectrumDatasetMaker
@@ -28,6 +28,7 @@ MAKER_REGISTRY = Registry(
         MapDatasetMaker,
         SafeMaskMaker,
         DatasetsMaker,
+        HessMapDatasetMaker,
     ]
 )
 """Registry of maker classes in Gammapy."""
@@ -36,6 +37,7 @@ __all__ = [
     "AdaptiveRingBackgroundMaker",
     "DatasetsMaker",
     "FoVBackgroundMaker",
+    "HessMapDatasetMaker",
     "Maker",
     "MAKER_REGISTRY",
     "MapDatasetMaker",
