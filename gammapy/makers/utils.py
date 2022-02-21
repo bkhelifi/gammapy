@@ -273,6 +273,14 @@ def make_edisp_map(edisp, pointing, geom, exposure_map=None, use_region_center=T
     edispmap : `~gammapy.irf.EDispMap`
         the resulting EDisp map
     """
+
+    # # Create temporary EDispMap Geom (dirty - to be optimised, using from_nodes)
+    # migra_axis = geom.axes["migra"].copy()
+    # migra_axis._nodes *= energy_weight
+    # del migra_axis.edges
+    # new_geom = geom.to_image().to_cube([migra_axis, geom.axes["energy_true"]])
+    # raise RuntimeError
+
     # Compute separations with pointing position
     if not use_region_center:
         coords, weights = geom.get_wcs_coord_and_weights()
@@ -284,7 +292,7 @@ def make_edisp_map(edisp, pointing, geom, exposure_map=None, use_region_center=T
     # Compute EDisp values
     data = edisp.evaluate(
         offset=offset,
-        energy_true=coords["energy_true"]*energy_weight,
+        energy_true=coords["energy_true"],
         migra=coords["migra"],
     )
 

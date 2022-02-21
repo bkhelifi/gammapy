@@ -414,36 +414,36 @@ class HessMapDatasetMaker(MapDatasetMaker):
         Default is True, have to be set to True for CTA IRF.
     """
 
-    @staticmethod
-    def make_exposure(geom, observation, use_region_center=True):
-        """Make exposure map.
-
-        Parameters
-        ----------
-        geom : `~gammapy.maps.Geom`
-            Reference map geom.
-        observation : `~gammapy.data.Observation`
-            Observation container.
-
-        Returns
-        -------
-        exposure : `~gammapy.maps.Map`
-            Exposure map.
-        """
-        if isinstance(observation.aeff, Map):
-            print("WARNING: THIS IS BAAAAD (aeff)  ++++ BKH +++++ BKH +++++")
-            return observation.aeff.interp_to_geom(
-                geom=geom,
-            )
-
-        return make_map_exposure_true_energy(
-            pointing=observation.pointing_radec,
-            livetime=observation.observation_live_time_duration,
-            aeff=observation.aeff,
-            geom=geom,
-            use_region_center=use_region_center,
-            energy_weight=1./observation.obs_info["TC"]
-        )
+    # @staticmethod
+    # def make_exposure(geom, observation, use_region_center=True):
+    #     """Make exposure map.
+    #
+    #     Parameters
+    #     ----------
+    #     geom : `~gammapy.maps.Geom`
+    #         Reference map geom.
+    #     observation : `~gammapy.data.Observation`
+    #         Observation container.
+    #
+    #     Returns
+    #     -------
+    #     exposure : `~gammapy.maps.Map`
+    #         Exposure map.
+    #     """
+    #     if isinstance(observation.aeff, Map):
+    #         print("WARNING: THIS IS BAAAAD (aeff)  ++++ BKH +++++ BKH +++++")
+    #         return observation.aeff.interp_to_geom(
+    #             geom=geom,
+    #         )
+    #
+    #     return make_map_exposure_true_energy(
+    #         pointing=observation.pointing_radec,
+    #         livetime=observation.observation_live_time_duration,
+    #         aeff=observation.aeff,
+    #         geom=geom,
+    #         use_region_center=use_region_center,
+    #         # energy_weight=1./observation.obs_info["TC"]
+    #     )
 
     def make_edisp(self, geom, observation):
         """Make energy dispersion map.
@@ -465,13 +465,22 @@ class HessMapDatasetMaker(MapDatasetMaker):
 
         use_region_center = getattr(self, "use_region_center", True)
 
+        # Create temporary EDispMap Geom (dirty - to be optimised, using from_nodes)
+        from gammapy.irf import EnergyDispersion2D
+        import numpy as np
+        edisp = observation.edisp
+        new_edisp = EnergyDispersion2D(edisp.axes, edisp.data/observation.obs_info["TC"], edisp.unit, edisp.meta)
+        new_edisp.axes["migra"]._nodes *= observation.obs_info["TC"]
+        del new_edisp.axes["migra"].edges
+
         return make_edisp_map(
-            edisp=observation.edisp,
+            # edisp=observation.edisp,
+            edisp=new_edisp,
             pointing=observation.pointing_radec,
             geom=geom,
             exposure_map=exposure,
             use_region_center=use_region_center,
-            energy_weight=1./observation.obs_info["TC"]
+            # energy_weight=observation.obs_info["TC"]
         )
 
     def make_edisp_kernel(self, geom, observation):
@@ -492,48 +501,56 @@ class HessMapDatasetMaker(MapDatasetMaker):
         if isinstance(observation.edisp, EDispKernelMap):
             exposure = None
             interp_map = observation.edisp.edisp_map.interp_to_geom(geom)
-            print("WARNING: THIS IS BAAAAD (edisp)  ++++ BKH +++++ BKH +++++")
             return EDispKernelMap(edisp_kernel_map=interp_map, exposure_map=exposure)
 
         exposure = self.make_exposure(geom.squash(axis_name="energy"), observation)
 
         use_region_center = getattr(self, "use_region_center", True)
 
+        # Create temporary EDispMap Geom (dirty - to be optimised, using from_nodes)
+        from gammapy.irf import EnergyDispersion2D
+        import numpy as np
+        edisp = observation.edisp
+        new_edisp = EnergyDispersion2D(edisp.axes, edisp.data/observation.obs_info["TC"], edisp.unit, edisp.meta)
+        new_edisp.axes["migra"]._nodes *= observation.obs_info["TC"]
+        del new_edisp.axes["migra"].edges
+
         return make_edisp_kernel_map(
-            edisp=observation.edisp,
+            # edisp=observation.edisp,
+            edisp=new_edisp,
             pointing=observation.pointing_radec,
             geom=geom,
             exposure_map=exposure,
             use_region_center=use_region_center,
-            energy_weight=1./observation.obs_info["TC"]
+            # energy_weight=observation.obs_info["TC"]
         )
 
-    def make_psf(self, geom, observation):
-        """Make psf map.
-
-        Parameters
-        ----------
-        geom : `~gammapy.maps.Geom`
-            Reference geom.
-        observation : `~gammapy.data.Observation`
-            Observation container.
-
-        Returns
-        -------
-        psf : `~gammapy.irf.PSFMap`
-            Psf map.
-        """
-        psf = observation.psf
-
-        if isinstance(psf, PSFMap):
-            return PSFMap(psf.psf_map.interp_to_geom(geom))
-
-        exposure = self.make_exposure_irf(geom.squash(axis_name="rad"), observation)
-
-        return make_psf_map(
-            psf=psf,
-            pointing=observation.pointing_radec,
-            geom=geom,
-            exposure_map=exposure,
-            energy_weight=1./observation.obs_info["TC"]
-        )
+    # def make_psf(self, geom, observation):
+    #     """Make psf map.
+    #
+    #     Parameters
+    #     ----------
+    #     geom : `~gammapy.maps.Geom`
+    #         Reference geom.
+    #     observation : `~gammapy.data.Observation`
+    #         Observation container.
+    #
+    #     Returns
+    #     -------
+    #     psf : `~gammapy.irf.PSFMap`
+    #         Psf map.
+    #     """
+    #     psf = observation.psf
+    #
+    #     if isinstance(psf, PSFMap):
+    #         return PSFMap(psf.psf_map.interp_to_geom(geom))
+    #
+    #     exposure = self.make_exposure_irf(geom.squash(axis_name="rad"), observation)
+    #
+    #     return make_psf_map(
+    #         psf=psf,
+    #         pointing=observation.pointing_radec,
+    #         geom=geom,
+    #         exposure_map=exposure,
+    #         energy_weight=1./observation.obs_info["TC"]
+    #     )
