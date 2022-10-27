@@ -500,6 +500,11 @@ def create_cff_file(authors, release_name, from_release=None):
     return citation_file
 
 
+def print_emails(auth_dict):
+    for auth in auth_dict:
+        print(f" {auth['email']} ,")
+
+
 @cli.command("update", help="Update the authors list from commits. Need `export GITHUB_TOKEN=xxxxx`.")
 @click.option('--from_release', default=None,  help='The shortlog is made since this release name')
 def update(from_release=None):
@@ -595,6 +600,8 @@ def make_cff(release_name, from_release=None):
     cff_authors_dict = get_git_shortlog_authors(since=tags[from_release])
 
     _ = create_cff_file(cff_authors_dict, release_name=release_name, from_release=from_release)
+
+    print_emails(cff_authors_dict)
 
 
 @cli.command("make_codemeta", help="Creation of a new CITATION.cff file. Need `export GITHUB_TOKEN=xxxxx`.")
