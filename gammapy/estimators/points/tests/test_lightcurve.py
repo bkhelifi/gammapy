@@ -642,6 +642,31 @@ def test_lightcurve_estimator_map_datasets():
 
 
 @requires_data()
+def test_lightcurve_estimator_map_datasets_reoptimize():
+    datasets = get_map_datasets()
+
+    time_intervals = [
+        Time(["2010-01-01T00:00:00", "2010-01-01T01:00:00"]),
+        Time(["2010-01-01T01:00:00", "2010-01-01T02:00:00"]),
+    ]
+    estimator = LightCurveEstimator(
+        energy_edges=[1, 100] * u.TeV,
+        source="test_source",
+        time_intervals=time_intervals,
+        selection_optional=["errn-errp"],
+        reoptimize=True,
+    )
+    datasets[0].models["test_source"].spectral_model.parameters[
+        "amplitude"
+    ].frozen = False
+    datasets[0].models["test_source"].spatial_model.parameters["e"].frozen = False
+    lightcurve = estimator.run(datasets)
+    table = lightcurve.to_table(sed_type="flux", format="lightcurve", formatted=True)
+    print(table["flux"][0], table["flux_err"][0], table["flux_errp"][0])
+    assert False
+
+
+@requires_data()
 def test_recompute_ul():
     datasets = get_spectrum_datasets()
     selection = ["all"]
