@@ -12,7 +12,10 @@ import matplotlib.pyplot as plt
 import yaml
 from gammapy.maps import Map, RegionGeom
 from gammapy.modeling import Covariance, Parameter, Parameters
+from gammapy.utils.check import check_version
+from gammapy.utils.metadata import CreatorMetaData
 from gammapy.utils.scripts import make_name, make_path
+from gammapy.version import version
 
 __all__ = ["Model", "Models", "DatasetModels", "ModelBase"]
 
@@ -428,6 +431,18 @@ class DatasetModels(collections.abc.Sequence):
     def from_yaml(cls, yaml_str, path=""):
         """Create from YAML string."""
         data = yaml.safe_load(yaml_str)
+        if "metadata" in data.keys():
+            creator_version = data["metadata"]["creator"].split()[1]
+            if check_version(creator_version) < 0:
+                log.warning(
+                    f"The currently used Gammapy version ({version}) is older than the one used to create the model ({creator_version})"
+                )
+            else:
+                log.debug(
+                    f"The currently used Gammapy version ({version}) is compatible with the one used to create the model ({creator_version})"
+                )
+            # For the moment, models metadata are not kept in a dedicated metadata class
+            del data["metadata"]
         return cls.from_dict(data, path=path)
 
     @classmethod
@@ -480,15 +495,15 @@ class DatasetModels(collections.abc.Sequence):
         Parameters
         ----------
         path : `pathlib.Path` or str
-            path to write files
+            Path to write files.
         overwrite : bool
-            overwrite YAML files
+            Overwrite YAML files. Default is False.
         full_output : bool
-            Store full parameter output.
+            Store full parameter output. Default is False.
         overwrite_templates : bool
-            overwrite templates FITS files
+            Overwrite templates FITS files. Default is False.
         write_covariance : bool
-            save covariance or not
+            Save covariance or not. Default is True.
         """
         base_path, _ = split(path)
         path = make_path(path)
@@ -514,9 +529,11 @@ class DatasetModels(collections.abc.Sequence):
     def to_yaml(self, full_output=False, overwrite_templates=False):
         """Convert to YAML string."""
         data = self.to_dict(full_output, overwrite_templates)
-        return yaml.dump(
+        text = yaml.dump(
             data, sort_keys=False, indent=4, width=80, default_flow_style=False
         )
+        creation = CreatorMetaData.from_default()
+        return text + creation.to_yaml()
 
     def update_link_label(self):
         """update linked parameters labels used for serialization and print"""
