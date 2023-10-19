@@ -51,7 +51,7 @@ class MetaData(BaseModel):
 
     def to_yaml(self):
         """Dumps metadata content to yaml."""
-        meta = json.loads(self.json())
+        meta = {"metadata": json.loads(self.json())}
         return yaml.dump(
             meta, sort_keys=False, indent=4, width=80, default_flow_style=False
         )
