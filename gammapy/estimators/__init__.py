@@ -3,6 +3,7 @@
 from gammapy.utils.registry import Registry
 from .core import Estimator
 from .map import ASmoothMapEstimator, ExcessMapEstimator, FluxMaps, TSMapEstimator
+from .metadata import FluxMetaData
 from .points import (
     FluxPoints,
     FluxPointsEstimator,
@@ -26,6 +27,7 @@ __all__ = [
     "LightCurveEstimator",
     "SensitivityEstimator",
     "TSMapEstimator",
+    "FluxMetaData",
 ]
 
 

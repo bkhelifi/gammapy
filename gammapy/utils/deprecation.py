@@ -45,7 +45,7 @@ def deprecated_renamed_argument(old_name, new_name, since, **kwargs):
 
 def deprecated_attribute(name, since, **kwargs):
     """
-    Used to mark a public attribute as deprecated.  This creates a
+    Used to mark a public attribute as deprecated. This creates a
     property that will warn when the given attribute name is accessed.
     """
     from astropy.utils import deprecated_attribute

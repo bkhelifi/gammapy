@@ -118,7 +118,7 @@ class CreatorMetaData(MetaData):
         Parameters
         ----------
         hdr : dict
-            the header dictionary
+            the header dictionary.
         format : str
             header format. Default is 'gadf'.
         """
@@ -128,4 +128,20 @@ class CreatorMetaData(MetaData):
         date = hdr.get("CREATED", None)  # note regular FITS keyword is DATE
         origin = hdr.get("ORIGIN", None)
         creator = hdr.get("CREATOR", None)
+
+        return cls(creator=creator, date=date, origin=origin)
+
+    def from_dict(cls, data):
+        """Extract metadata from a dictionary.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary containing data.
+        """
+
+        creator = data["creator"] if "creator" in data else f"Gammapy {version}"
+        date = data["date"] if "date" in data else Time.now()
+        origin = data["origin"] if "origin" in data else None
+
         return cls(creator=creator, date=date, origin=origin)
