@@ -13,6 +13,7 @@ from gammapy.modeling.models import (
     SpectralModel,
 )
 from gammapy.utils.scripts import make_path
+from ..metadata import FluxMetaData
 
 __all__ = ["FluxMaps"]
 
@@ -133,8 +134,8 @@ class FluxMaps:
     reference_model : `~gammapy.modeling.models.SkyModel`, optional
         The reference model to use for conversions. If None, a model consisting
         of a point source with a power law spectrum of index 2 is assumed.
-    meta : dict, optional
-        Dict of metadata.
+    meta : `~gammapy.estimators.FluxMetaData`
+        Associated metadata.
     gti : `~gammapy.data.GTI`, optional
         Maps GTI information.
     filter_success_nan : boolean, optional
@@ -154,7 +155,7 @@ class FluxMaps:
         self._reference_model = reference_model
 
         if meta is None:
-            meta = {}
+            meta = FluxMetaData.from_default()
 
         meta.setdefault("sed_type_init", "likelihood")
         self.meta = meta
@@ -235,7 +236,7 @@ class FluxMaps:
 
     @property
     def is_convertible_to_flux_sed_type(self):
-        """Check whether differential sed type is convertible to integral sed type"""
+        """Check whether differential sed type is convertible to integral sed type."""
         if self.sed_type_init in ["dnde", "e2dnde"]:
             return self.energy_axis.node_type == "edges"
 
@@ -243,47 +244,47 @@ class FluxMaps:
 
     @property
     def has_ul(self):
-        """Whether the flux estimate has norm_ul defined"""
+        """Whether the flux estimate has norm_ul defined."""
         return "norm_ul" in self._data
 
     @property
     def has_any_ts(self):
-        """Whether the flux estimate has either sqrt(ts) or ts defined"""
+        """Whether the flux estimate has either sqrt(ts) or ts defined."""
         return any(_ in self._data for _ in ["ts", "sqrt_ts"])
 
     @property
     def has_stat_profiles(self):
-        """Whether the flux estimate has stat profiles"""
+        """Whether the flux estimate has stat profiles."""
         return "stat_scan" in self._data
 
     @property
     def has_success(self):
-        """Whether the flux estimate has the fit status"""
+        """Whether the flux estimate has the fit status."""
         return "success" in self._data
 
     @property
     def n_sigma(self):
-        """n sigma"""
+        """Sigma threshold for upper limits. Default: 1."""
         return self.meta.get("n_sigma", 1)
 
     @property
     def n_sigma_ul(self):
-        """n sigma UL"""
+        """Confidence level in sigma for upper limits computation."""
         return self.meta.get("n_sigma_ul")
 
     @property
     def sqrt_ts_threshold_ul(self):
-        """sqrt(TS) threshold for upper limits"""
+        """sqrt(TS) threshold for upper limits. Default: 2."""
         return self.meta.get("sqrt_ts_threshold_ul", 2)
 
     @sqrt_ts_threshold_ul.setter
     def sqrt_ts_threshold_ul(self, value):
-        """sqrt(TS) threshold for upper limits
+        """sqrt(TS) threshold for upper limits.
 
         Parameters
         ----------
         value : int
-            Threshold value in sqrt(TS) for upper limits
+            Threshold value in sqrt(TS) for upper limits.
         """
         self.meta["sqrt_ts_threshold_ul"] = value
 
@@ -294,12 +295,12 @@ class FluxMaps:
 
     @property
     def sed_type_init(self):
-        """Initial sed type"""
+        """Initial sed type."""
         return self.meta.get("sed_type_init")
 
     @property
     def sed_type_plot_default(self):
-        """Initial sed type"""
+        """Initial sed type."""
         if self.sed_type_init == "likelihood":
             return "dnde"
 
@@ -307,27 +308,27 @@ class FluxMaps:
 
     @property
     def geom(self):
-        """Reference map geometry (`Geom`)"""
+        """Reference map geometry (`Geom`)."""
         return self.norm.geom
 
     @property
     def energy_axis(self):
-        """Energy axis (`MapAxis`)"""
+        """Energy axis (`MapAxis`)."""
         return self.geom.axes["energy"]
 
     @classproperty
     def reference_model_default(self):
-        """Reference model default (`SkyModel`)"""
+        """Reference model default (`SkyModel`)."""
         return SkyModel(PowerLawSpectralModel(index=2))
 
     @property
     def reference_model(self):
-        """Reference model (`SkyModel`)"""
+        """Reference model (`SkyModel`)."""
         return self._reference_model
 
     @property
     def reference_spectral_model(self):
-        """Reference spectral model (`SpectralModel`)"""
+        """Reference spectral model (`SpectralModel`)."""
         return self.reference_model.spectral_model
 
     @property
@@ -346,7 +347,7 @@ class FluxMaps:
 
     @property
     def energy_min(self):
-        """Energy min
+        """Energy min.
 
         Returns
         -------
@@ -357,7 +358,7 @@ class FluxMaps:
 
     @property
     def energy_max(self):
-        """Energy max
+        """Energy max.
 
         Returns
         -------
@@ -369,19 +370,19 @@ class FluxMaps:
     # TODO: keep or remove?
     @property
     def niter(self):
-        """Number of iterations of fit"""
+        """Number of iterations of fit."""
         self._check_quantity("niter")
         return self._data["niter"]
 
     @property
     def success(self):
-        """Fit success flag"""
+        """Fit success flag."""
         self._check_quantity("success")
         return self._data["success"]
 
     @property
     def is_ul(self):
-        """Whether data is an upper limit"""
+        """Whether data is an upper limit."""
         # TODO: make this a well defined behaviour
         is_ul = self.norm.copy(data=False)
 
@@ -398,7 +399,7 @@ class FluxMaps:
 
     @is_ul.setter
     def is_ul(self, value):
-        """Whether data is an upper limit
+        """Whether data is an upper limit.
 
         Parameters
         ----------
@@ -412,26 +413,26 @@ class FluxMaps:
 
     @property
     def counts(self):
-        """Predicted counts null hypothesis"""
+        """Predicted counts null hypothesis."""
         self._check_quantity("counts")
         return self._data["counts"]
 
     @property
     def npred(self):
-        """Predicted counts from best fit hypothesis"""
+        """Predicted counts from best fit hypothesis."""
         self._check_quantity("npred")
         return self._data["npred"]
 
     @property
     def npred_background(self):
-        """Predicted background counts from best fit hypothesis"""
+        """Predicted background counts from best fit hypothesis."""
         self._check_quantity("npred")
         self._check_quantity("npred_excess")
         return self.npred - self.npred_excess
 
     @property
     def npred_excess(self):
-        """Predicted excess count from best fit hypothesis"""
+        """Predicted excess count from best fit hypothesis."""
         self._check_quantity("npred_excess")
         return self._data["npred_excess"]
 
@@ -453,17 +454,17 @@ class FluxMaps:
 
     @property
     def npred_excess_ref(self):
-        """Predicted excess reference counts"""
+        """Predicted excess reference counts."""
         return self.npred_excess / self._expand_dims(self.norm.data)
 
     @property
     def npred_excess_err(self):
-        """Predicted excess counts error"""
+        """Predicted excess counts error."""
         return self.npred_excess_ref * self._expand_dims(self.norm_err.data)
 
     @property
     def npred_excess_errp(self):
-        """Predicted excess counts positive error"""
+        """Predicted excess counts positive error."""
         return self.npred_excess_ref * self._expand_dims(self.norm_errp.data)
 
     @property
@@ -522,7 +523,7 @@ class FluxMaps:
         Returns
         -------
         sqrt_ts : `Map`
-            sqrt(TS) map
+            sqrt(TS) map.
         """
         if "sqrt_ts" in self._data:
             return self._data["sqrt_ts"]
@@ -683,7 +684,7 @@ class FluxMaps:
 
     @property
     def flux_sensitivity(self):
-        """Sensitivity given as the flux for which the significance is ``self.meta["n_sigma_sensitivity]``"""
+        """Sensitivity given as the flux for which the significance is ``self.meta["n_sigma_sensitivity]``."""
         return self.norm_sensitivity * self.flux_ref
 
     @property
@@ -740,7 +741,7 @@ class FluxMaps:
         Returns
         -------
         flux_points : `~gammapy.estimators.FluxPoints`
-            Flux points object
+            Flux points object.
         """
         from gammapy.estimators import FluxPoints
 
@@ -771,7 +772,7 @@ class FluxMaps:
         Parameters
         ----------
         sed_type : {"likelihood", "dnde", "e2dnde", "flux", "eflux"}
-            sed type to convert to. Default is `Likelihood`
+            SED type to convert to. Default: 'likelihood'.
 
         Returns
         -------
@@ -802,7 +803,7 @@ class FluxMaps:
         maps : list of `FluxMaps`
             List of maps to stack.
         axis : `MapAxis`
-            New axis to create
+            New axis to create.
 
         Returns
         -------
@@ -837,14 +838,14 @@ class FluxMaps:
         Parameters
         ----------
         axis_name : str
-             Name of the axis to split on
+             Name of the axis to split on.
         keepdims : bool
-            Whether to keep the split axis with a single bin
+            Whether to keep the split axis with a single bin. Default: False.
 
         Returns
         -------
         flux_maps : `FluxMap`
-            FluxMap iteration
+            FluxMap iteration.
 
         """
 
@@ -879,15 +880,15 @@ class FluxMaps:
         maps : `Maps`
             Maps object containing the input maps.
         sed_type : str
-            SED type of the input maps. Default is `Likelihood`
+            SED type of the input maps.
         reference_model : `~gammapy.modeling.models.SkyModel`, optional
-            Reference model to use for conversions. Default in None.
+            Reference model to use for conversions. Default: None.
             If None, a model consisting of a point source with a power
             law spectrum of index 2 is assumed.
         gti : `~gammapy.data.GTI`
-            Maps GTI information. Default is None.
-        meta : `dict`
-            Meta dict.
+            Maps GTI information. Default: None.
+        meta : `~gammapy.estimator.FluxMetaData`
+            Associated metadata. Default: None.
 
         Returns
         -------
@@ -947,7 +948,7 @@ class FluxMaps:
         Parameters
         ----------
         sed_type : str
-            sed type to convert to. Default is `Likelihood`
+            sed type to convert to. Default is 'Likelihood'.
         hdu_bands : str
             Name of the HDU with the BANDS table. Default is 'BANDS'
             If set to None, each map will have its own hdu_band
