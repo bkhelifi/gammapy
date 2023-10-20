@@ -3,8 +3,11 @@ from typing import Optional
 import pytest
 from numpy.testing import assert_allclose
 from astropy.coordinates import SkyCoord
+from astropy.table import Table
+from astropy.time import Time
 from pydantic import ValidationError
 from gammapy.utils.metadata import CreatorMetaData, MetaData
+from gammapy.version import version
 
 
 def test_creator():
@@ -19,6 +22,24 @@ def test_creator():
 
     with pytest.raises(ValidationError):
         default.date = 3
+
+    table = Table()
+    table["e"] = [1, 2, 3]
+    default.to_table(table)
+    assert table.meta["ORIGIN"] == "CTA"
+
+
+def test_default():
+    default = CreatorMetaData.from_default()
+    assert default.creator == f"Gammapy {version}"
+
+
+def test_dict():
+    adict = {"DATE": Time.now().iso, "CREATOR": "gammapy"}
+    default = CreatorMetaData.from_dict(adict)
+
+    assert default.creator == "gammapy"
+    assert default.origin is None
 
 
 def test_subclass():
