@@ -104,6 +104,18 @@ class CreatorMetaData(MetaData):
 
         return hdr_dict
 
+    def to_table(self, table):
+        """Write the metadata into a data table.
+
+        Parameters
+        ----------
+        table : `~astropy.table.Table`
+            Flux table.
+        """
+        table.meta["CREATED"] = self.date.iso
+        table.meta["CREATOR"] = self.creator
+        table.meta["ORIGIN"] = self.origin
+
     @classmethod
     def from_default(cls):
         """Creation metadata containing current time and Gammapy version."""
@@ -131,6 +143,7 @@ class CreatorMetaData(MetaData):
 
         return cls(creator=creator, date=date, origin=origin)
 
+    @classmethod
     def from_dict(cls, data):
         """Extract metadata from a dictionary.
 
@@ -140,8 +153,8 @@ class CreatorMetaData(MetaData):
             Dictionary containing data.
         """
 
-        creator = data["creator"] if "creator" in data else f"Gammapy {version}"
-        date = data["date"] if "date" in data else Time.now()
-        origin = data["origin"] if "origin" in data else None
+        creator = data["CREATOR"] if "CREATOR" in data else f"Gammapy {version}"
+        date = data["DATE"] if "DATE" in data else Time.now()
+        origin = data["ORIGIN"] if "ORIGIN" in data else None
 
         return cls(creator=creator, date=date, origin=origin)
