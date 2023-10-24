@@ -265,17 +265,17 @@ class FluxMaps:
     @property
     def n_sigma(self):
         """Sigma threshold for upper limits. Default: 1."""
-        return self.meta.get("n_sigma", 1)
+        return self.meta.n_sigma if self.meta.n_sigma else 1
 
     @property
     def n_sigma_ul(self):
         """Confidence level in sigma for upper limits computation."""
-        return self.meta.get("n_sigma_ul")
+        return self.meta.n_sigma_ul
 
     @property
     def sqrt_ts_threshold_ul(self):
-        """sqrt(TS) threshold for upper limits. Default: 2."""
-        return self.meta.get("sqrt_ts_threshold_ul", 2)
+        """Sqrt(TS) threshold for upper limits. Default: 2."""
+        return self.meta.sqrt_ts_threshold_ul if self.meta.sqrt_ts_threshold_ul else 2.0
 
     @sqrt_ts_threshold_ul.setter
     def sqrt_ts_threshold_ul(self, value):
@@ -286,7 +286,7 @@ class FluxMaps:
         value : int
             Threshold value in sqrt(TS) for upper limits.
         """
-        self.meta["sqrt_ts_threshold_ul"] = value
+        self.meta.sqrt_ts_threshold_ul = value
 
         if self.has_any_ts:
             self.is_ul = self.sqrt_ts < self.sqrt_ts_threshold_ul
@@ -296,7 +296,7 @@ class FluxMaps:
     @property
     def sed_type_init(self):
         """Initial sed type."""
-        return self.meta.get("sed_type_init")
+        return self.meta.sed_type_init
 
     @property
     def sed_type_plot_default(self):
