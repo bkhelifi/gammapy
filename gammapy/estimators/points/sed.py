@@ -123,13 +123,19 @@ class FluxPointsEstimator(FluxEstimator, parallel.ParallelMixin):
                     "All datasets must use the same value of the"
                     " 'TELESCOP' meta keyword."
                 )
-
+        if "INSTRU" in datasets.meta_table.colnames:
+            instrument = datasets.meta_table["INSTRU"]
+            if not len(np.unique(instrument)) == 1:
+                raise ValueError(
+                    "All datasets must use the same value of the"
+                    " 'INSTRU' meta keyword."
+                )
         rows = []
 
         meta = {
-            "n_sigma": self.n_sigma,
-            "n_sigma_ul": self.n_sigma_ul,
-            "sed_type_init": "likelihood",
+            "N_SIGMA": self.n_sigma,
+            "NSIGMAUL": self.n_sigma_ul,
+            "SEDTYPEI": "likelihood",
         }
 
         rows = parallel.run_multiprocessing(
