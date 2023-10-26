@@ -344,8 +344,8 @@ def compute_lightcurve_fvar(lightcurve, flux_quantity="flux"):
     table = Table(
         [energies[:-1], energies[1:], fvar, fvar_err, significance],
         names=("min_energy", "max_energy", "fvar", "fvar_err", "significance"),
-        meta=lightcurve.meta,
     )
+    lightcurve.meta.to_table(table)
 
     return table
 
