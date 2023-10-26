@@ -98,9 +98,12 @@ class CreatorMetaData(MetaData):
             raise ValueError(f"Creator metadata: format {format} is not supported.")
 
         hdr_dict = {}
-        hdr_dict["CREATED"] = self.date.iso
-        hdr_dict["CREATOR"] = self.creator
-        hdr_dict["ORIGIN"] = self.origin
+        if self.date:
+            hdr_dict["CREATED"] = self.date.iso
+        if self.creator:
+            hdr_dict["CREATOR"] = self.creator
+        if self.origin:
+            hdr_dict["ORIGIN"] = self.origin
 
         return hdr_dict
 
@@ -112,9 +115,12 @@ class CreatorMetaData(MetaData):
         table : `~astropy.table.Table`
             Flux table.
         """
-        table.meta["CREATED"] = self.date.iso
-        table.meta["CREATOR"] = self.creator
-        table.meta["ORIGIN"] = self.origin
+        if self.date:
+            table.meta["CREATED"] = self.date.iso
+        if self.creator:
+            table.meta["CREATOR"] = self.creator
+        if self.origin:
+            table.meta["ORIGIN"] = self.origin
 
     @classmethod
     def from_default(cls):
