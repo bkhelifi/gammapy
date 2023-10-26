@@ -16,6 +16,7 @@ from gammapy.utils.array import shape_2N, symmetric_crop_pad_width
 from gammapy.utils.pbar import progress_bar
 from gammapy.utils.roots import find_roots
 from ..core import Estimator
+from ..metadata import FluxMetaData
 from ..utils import estimate_exposure_reco_energy
 from .core import FluxMaps
 
@@ -518,12 +519,17 @@ class TSMapEstimator(Estimator, parallel.ParallelMixin):
 
         maps["success"].data = maps["success"].data.astype(bool)
 
-        meta = {"n_sigma": self.n_sigma, "n_sigma_ul": self.n_sigma_ul}
+        meta = {
+            "N_SIGMA": self.n_sigma,
+            "NSIGMAUL": self.n_sigma_ul,
+            "SEDTYPEI": "eflux",
+        }
+        metadata = FluxMetaData.from_dict(meta)
         return FluxMaps(
             data=maps,
             reference_model=self.model,
             gti=dataset.gti,
-            meta=meta,
+            meta=metadata,
         )
 
 
