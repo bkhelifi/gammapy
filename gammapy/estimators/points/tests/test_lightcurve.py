@@ -107,6 +107,7 @@ def test_lightcurve_properties_flux(lc):
 
 @pytest.mark.parametrize("sed_type", ["dnde", "flux", "likelihood"])
 def test_lightcurve_read_write(tmp_path, lc, sed_type):
+
     lc.write(tmp_path / "tmp.fits", format="lightcurve", sed_type=sed_type)
 
     lc = FluxPoints.read(tmp_path / "tmp.fits", format="lightcurve")
@@ -659,7 +660,7 @@ def test_recompute_ul():
     assert_allclose(
         new_lightcurve.dnde_ul.data[0], [[[3.774561e-13]], [[1.374421e-14]]], rtol=1e-3
     )
-    assert new_lightcurve.meta["n_sigma_ul"] == 4
+    assert new_lightcurve.meta.n_sigma_ul == 4
 
     # test if scan is not present
     selection = []
