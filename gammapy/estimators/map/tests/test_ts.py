@@ -128,6 +128,8 @@ def test_compute_ts_map(input_dataset):
     assert result["flux"].unit == u.Unit("cm-2s-1")
     assert result["flux_err"].unit == u.Unit("cm-2s-1")
 
+    # ToDo: test the metadata
+
     # Check mask is correctly taken into account
     assert np.isnan(result["ts"].data[0, 30, 40])
 
