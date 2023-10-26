@@ -1,17 +1,30 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 import logging
-from typing import List, Optional
+from typing import Optional
 import numpy as np
 from scipy import stats
 from astropy.coordinates import SkyCoord
 from pydantic import ValidationError, validator
-from gammapy.data import GTI
 from gammapy.utils.metadata import CreatorMetaData, MetaData
 
 __all__ = ["FluxMetaData"]
 
 SEDTYPE = ["dnde", "flux", "eflux", "e2dnde", "likelihood"]
 FPFORMAT = ["gadf-sed", "lightcurve"]
+STANDARD_KEYS = [
+    "SED_TYPE",
+    "SEDTYPEI",
+    "UL_CONF",
+    "N_SIGMA",
+    "NSIGMAUL",
+    "STSTHUL",
+    "NSIGMSEN",
+    "TARGETNA",
+    "TARGETPO",
+    "OBS_IDS",
+    "DATASETS",
+    "INSTRU",
+]
 
 log = logging.getLogger(__name__)
 
@@ -33,8 +46,10 @@ class FluxMetaData(MetaData):
         Sigma number used to compute the upper limits.
     sqrt_ts_threshold_ul : float, optional
         Threshold on the square root of the likelihood value above which upper limits should be used.
-    gti : `~gammapy.data.gti`, optional
-        used Good Time Intervals.
+    n_sigma_sensitivity : float, optional
+        Sigma number for which the flux sensitivity is computed
+    # gti : `~gammapy.data.gti`, optional
+    #     used Good Time Intervals.
     target_name : str, optional
         Name of the target.
     target_position : `~astropy.coordinates.SkyCoord`, optional
@@ -49,6 +64,8 @@ class FluxMetaData(MetaData):
         The creation metadata.
     optional : dict, optional
         additional optional metadata.
+
+    Note: these quantities are serialized in FITS header with the keywords stored in STANDARD_KEYS
     """
 
     sed_type: Optional[str]  # Are these 6 fields really optional?
@@ -57,11 +74,12 @@ class FluxMetaData(MetaData):
     n_sigma: Optional[float]
     n_sigma_ul: Optional[float]
     sqrt_ts_threshold_ul: Optional[float]
-    gti: Optional[GTI]
+    n_sigma_sensitivity: Optional[float]
+    # gti: Optional[GTI]
     target_name: Optional[str]  # Are these 2 fields really optional?
     target_position: Optional[SkyCoord]
-    obs_ids: Optional[List[int]]
-    dataset_names: Optional[List[str]]  # Are these 2 fields really optional?
+    obs_ids: Optional[list[int]]
+    dataset_names: Optional[list[str]]  # Are these 2 fields really optional?
     instrument: Optional[str]
     creation: Optional[CreatorMetaData]  # Is this field really optional?
     optional: Optional[dict]
@@ -79,44 +97,23 @@ class FluxMetaData(MetaData):
 
     @validator("sed_type")
     def validate_sed_type(cls, v):
-        # if v is None:
-        #     # raise ValidationError(f"[sed_type] should be precised. Expect {SEDTYPE}")
-        #     return None
-        # elif isinstance(v, str):
-        #     if str not in SEDTYPE:
-        #         raise ValidationError(f"Incorrect [sed_type]. Expect {SEDTYPE}")
-        #     else:
-        #         return v
         if isinstance(v, str):
-            if str not in SEDTYPE:
+            if v not in SEDTYPE:
                 raise ValidationError(f"Incorrect [sed_type]. Expect {SEDTYPE}")
         return v
 
     @validator("sed_type_init")
     def validate_sed_type_init(cls, v):
-        # if v is None:
-        #     # raise ValidationError(f"[sed_type_init] should be precised. Expect {SEDTYPE}")
-        #     return None
-        # elif isinstance(v, str):
-        #     if str not in SEDTYPE:
-        #         raise ValidationError(f"Incorrect [sed_type_init]. Expect {SEDTYPE}")
-        #     else:
-        #         return v
         if isinstance(v, str):
-            if str not in SEDTYPE:
+            if v not in SEDTYPE:
                 raise ValidationError(f"Incorrect [sed_type_init]. Expect {SEDTYPE}")
         return v
 
-    @validator("gti")
-    def validate_gti(cls, v):
-        if v is None:
-            return None
-        elif isinstance(v, GTI):
-            return v
-        else:
-            raise ValidationError(
-                f"Incorrect [gti]. Expect a GTI, got {type(v)} instead."
-            )
+    @validator("obs_ids")
+    def validate_obs_ids(cls, v):
+        if isinstance(v, list) and not all(np.isfinite(_) for _ in v):
+            raise ValidationError("Incorrect [obs_ids]. Expect [int]")
+        return v
 
     @validator("creation")
     def validate_creation(cls, v):
@@ -134,44 +131,58 @@ class FluxMetaData(MetaData):
     @classmethod
     def from_default(cls):
         return cls(
-            creation=CreatorMetaData.from_default(), target_position=None, gti=None
+            # creation=CreatorMetaData.from_default(), target_position=None, gti=None
+            creation=CreatorMetaData.from_default()
         )
 
-    def to_header(self, format=None):
-        """Store the FluxPoints metadata into a fits header.
-
-        Parameters
-        ----------
-        format : {"gadf-sed", "lightcurve"}
-            The header data format.
-
-        Returns
-        -------
-        header : dict
-            The header dictionary.
-        """
-
-        if format is None or format not in FPFORMAT:
-            raise ValueError(
-                f"Metadata creation with format {format} is not supported. Use {FPFORMAT}"
-            )
-
-        hdr_dict = self.creation.to_header()
-        hdr_dict["SED_TYPE"] = self.sed_type
-        hdr_dict["SED_TYPE_INIT"] = self.sed_type_init
-        hdr_dict["UL_CONF"] = self.ul_conf
-        hdr_dict["N_SIGMA"] = self.n_sigma
-        hdr_dict["N_SIGMA_UL"] = self.n_sigma_ul
-        hdr_dict["SQRT_TS_THRESHOLD_UL"] = self.sqrt_ts_threshold_ul
-        # hdr_dict["GTI"] = self.gti #They should be written in a HDU, in in the header
-        hdr_dict["TARGET_NAME"] = self.target_name
-        hdr_dict["TARGET_POSITION"] = self.target_position
-        hdr_dict["OBS_IDS"] = self.obs_ids
-        hdr_dict["DATASET_NAMES"] = self.dataset_names
-        hdr_dict["INSTRUMENT"] = self.instrument
-        # Do not forget that we have optional metadata
-
-        return hdr_dict
+    # def to_header(self, format=None):
+    #     """Store the FluxPoints metadata into a fits header.
+    #
+    #     Parameters
+    #     ----------
+    #     format : {"gadf-sed", "lightcurve"}
+    #         The header data format.
+    #
+    #     Returns
+    #     -------
+    #     header : dict
+    #         The header dictionary.
+    #     """
+    #
+    #     if format is None or format not in FPFORMAT:
+    #         raise ValueError(
+    #             f"Metadata creation with format {format} is not supported. Use {FPFORMAT}"
+    #         )
+    #
+    #     hdr_dict = self.creation.to_header()
+    #     hdr_dict["SED_TYPE"] = self.sed_type
+    #     hdr_dict["SEDTYPEI"] = self.sed_type_init
+    #     if np.isfinite(self.ul_conf):
+    #         hdr_dict["UL_CONF"] = self.ul_conf
+    #     if np.isfinite(self.n_sigma):
+    #         hdr_dict["N_SIGMA"] = self.n_sigma
+    #     if np.isfinite(self.n_sigma_ul):
+    #         hdr_dict["NSIGMAUL"] = self.n_sigma_ul
+    #     if np.isfinite(self.sqrt_ts_threshold_ul):
+    #         hdr_dict["STSTHUL"] = self.sqrt_ts_threshold_ul
+    #     # hdr_dict["GTI"] = self.gti #They should be written in a HDU, in in the header
+    #     if self.target_name is not None:
+    #         hdr_dict["TARGETNA"] = self.target_name
+    #     if np.isfinite(self.target_position.ra):
+    #         hdr_dict["TARGETPO"] = self._target_to_string(self.target_position)
+    #     if np.isfinite(self.obs_ids[0]):
+    #         hdr_dict["OBS_IDS"] = self.obs_ids
+    #     if self.dataset_names[0] is not None:
+    #         hdr_dict["DATASETS"] = self.dataset_names
+    #     if self.instrument is not None:
+    #         hdr_dict["INSTRU"] = self.instrument
+    #     # Do not forget that we have optional metadata
+    #
+    #     if self.optional:
+    #         for k in self.optional:
+    #             hdr_dict[str(k).upper()] = self.optional[k]
+    #
+    #     return hdr_dict
 
     # @classmethod
     # def from_header(cls, hdr, format="gadf"):
@@ -199,54 +210,51 @@ class FluxMetaData(MetaData):
         """
 
         sed_type = data["SED_TYPE"] if "SED_TYPE" in data else None
-        sed_type_init = data["SED_TYPE_INIT"] if "SED_TYPE_INIT" in data else None
+        sed_type_init = data["SEDTYPEI"] if "SEDTYPEI" in data else None
         creation = CreatorMetaData.from_dict(data)
+        meta = cls(sed_type=sed_type, sed_type_init=sed_type_init, creation=creation)
 
-        ul_conf = data["UL_CONF"] if "UL_CONF" in data else None
-        n_sigma = data["N_SIGMA"] if "N_SIGMA" in data else None
+        if "UL_CONF" in data:
+            meta.ul_conf = float(data["UL_CONF"])
+        if "N_SIGMA" in data:
+            meta.n_sigma = float(data["N_SIGMA"])
 
-        n_sigma_ul = data["N_SIGMA_UL"] if "N_SIGMA_UL" in data else None
-        if ul_conf:
-            if n_sigma_ul:
-                if n_sigma_ul != np.round(stats.norm.isf(0.5 * (1 - ul_conf)), 1):
-                    log.warn(
-                        f"Inconsistency between n_sigma_ul={n_sigma_ul} and ul_conf={ul_conf}"
-                    )
-            else:
-                n_sigma_ul = np.round(stats.norm.isf(0.5 * (1 - ul_conf)), 1)
+        if "NSIGMAUL" in data:
+            meta.n_sigma_ul = float(data["NSIGMAUL"])
+            if meta.ul_conf and meta.n_sigma_ul != np.round(
+                stats.norm.isf(0.5 * (1 - meta.ul_conf)), 1
+            ):
+                log.warning(
+                    f"Inconsistency between n_sigma_ul={meta.n_sigma_ul} and ul_conf={meta.ul_conf}"
+                )
+        elif meta.ul_conf:
+            meta.n_sigma_ul = np.round(stats.norm.isf(0.5 * (1 - meta.ul_conf)), 1)
 
-        sqrt_ts_threshold_ul = (
-            data["SQRT_TS_THRESHOLD_UL"] if "SQRT_TS_THRESHOLD_UL" in data else None
-        )
-        target_name = data["TARGET_NAME"] if "TARGET_NAME" in data else None
-        obs_ids = data["OBS_IDS"] if "OBS_IDS" in data else [None]
-        dataset_names = data["DATASET_NAMES"] if "DATASET_NAMES" in data else [None]
-        instrument = data["INSTRUMENT"] if "INSTRUMENT" in data else None
-        target_position = data["TARGET_POSITION"] if "TARGET_POSITION" in data else None
-        # gti = data["gti"] if "gti" in data else None #There are stored in a dedicated HDU
+        if "STSTHUL" in data:
+            meta.sqrt_ts_threshold_ul = float(data["STSTHUL"])
+        if "NSIGMSEN" in data:
+            meta.n_sigma_sensitivity = float(data["NSIGMSEN"])
+        if "TARGETNA" in data:
+            meta.target_name = data["TARGETNA"]
+        if "OBS_IDS" in data:
+            meta.obs_ids = FluxMetaData._obsids_from_string(data["OBS_IDS"])
+        if "DATASETS" in data:
+            meta.dataset_names = data["DATASETS"]
+        if "INSTRU" in data:
+            meta.instrument = data["INSTRU"]
+        if "TARGETPO" in data:
+            meta.target_position = FluxMetaData._target_from_string(data["TARGETPO"])
 
-        meta = cls(
-            sed_type=sed_type,
-            sed_type_init=sed_type_init,
-            creation=creation,
-            ul_conf=ul_conf,
-            n_sigma=n_sigma,
-            n_sigma_ul=n_sigma_ul,
-            sqrt_ts_threshold_ul=sqrt_ts_threshold_ul,
-            target_name=target_name,
-            target_position=target_position,
-            dataset_names=dataset_names,
-            instrument=instrument,
-            obs_ids=obs_ids,
-            # gti=gti,
-        )
-        if "optional" in data:
-            meta.optional = data["optional"]
+        for kk in data:
+            if kk not in STANDARD_KEYS:
+                if meta.optional is None:
+                    meta.optional = {}
+                meta.optional[str(kk).lower()] = data[kk]
 
         return meta
 
     def to_table(self, table):
-        """Write the metadata into a data table.
+        """Write the metadata into a table. Only the non-null information are stored.
 
         Parameters
         ----------
@@ -254,19 +262,59 @@ class FluxMetaData(MetaData):
             Flux table.
         """
 
-        table.meta["SED_TYPE"] = self.sed_type
-        table.meta["SED_TYPE_INIT"] = self.sed_type_init
-        table.meta["UL_CONF"] = self.ul_conf
-        table.meta["N_SIGMA"] = self.n_sigma
-        table.meta["N_SIGMA_UL"] = self.n_sigma_ul
-        table.meta["SQRT_TS_THRESHOLD_UL"] = self.sqrt_ts_threshold_ul
-        table.meta["TARGET_NAME"] = self.target_name
-        table.meta["OBS_IDS"] = self.obs_ids
-        table.meta["DATASET_NAMES"] = self.dataset_names
-        table.meta["INSTRUMENT"] = self.instrument
-        table.meta["TARGET_POSITION"] = self.target_position
+        if self.sed_type:
+            table.meta["SED_TYPE"] = self.sed_type
+        if self.sed_type_init:
+            table.meta["SEDTYPEI"] = self.sed_type_init
+        if self.ul_conf:
+            table.meta["UL_CONF"] = str(self.ul_conf)
+        if self.n_sigma:
+            table.meta["N_SIGMA"] = str(self.n_sigma)
+        if self.n_sigma_ul:
+            table.meta["NSIGMAUL"] = str(self.n_sigma_ul)
+        if self.sqrt_ts_threshold_ul:
+            table.meta["STSTHUL"] = str(self.sqrt_ts_threshold_ul)
+        if self.n_sigma_sensitivity:
+            table.meta["NSIGMSEN"] = str(self.n_sigma_sensitivity)
+        if self.target_name:
+            table.meta["TARGETNA"] = self.target_name
+        if self.obs_ids:
+            table.meta["OBS_IDS"] = FluxMetaData._obsids_to_string(self.obs_ids)
+        if self.dataset_names:
+            table.meta["DATASETS"] = self.dataset_names
+        if self.instrument:
+            table.meta["INSTRU"] = self.instrument
+        if self.target_position and np.isfinite(self.target_position.ra):
+            table.meta["TARGETPO"] = FluxMetaData._target_to_string(
+                self.target_position
+            )
         # table.meta["GTI"] = self.gti #There are stored in a dedicated HDU
 
         self.creation.to_table(table)
 
-        # Ignore the optional metadata for the moment
+        if self.optional:
+            for k in self.optional:
+                table.meta[str(k).upper()] = self.optional[k]
+
+    @staticmethod
+    def _target_from_string(data):
+        values = data.split()
+        if "nan" in values:
+            return SkyCoord(np.nan, np.nan, unit="deg", frame="icrs")
+        return SkyCoord(values[0], values[1], unit="deg", frame="icrs")
+
+    @staticmethod
+    def _target_to_string(coord):
+        return coord.transform_to("icrs").to_string(precision=6)
+
+    @staticmethod
+    def _obsids_from_string(data):
+        values = data.split()
+        return [int(_) for _ in values]
+
+    @staticmethod
+    def _obsids_to_string(values):
+        out = ""
+        for _ in values:
+            out += str(_) + " "
+        return out
