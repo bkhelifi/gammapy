@@ -80,7 +80,7 @@ class FluxPoints(FluxMaps):
     >>> table["e_ref"] = e_ref
     >>> table["dnde"] = pwl(e_ref)
     >>> table["dnde_err"] = pwl.evaluate_error(e_ref)[0]
-    >>> table.meta["SED_TYPE"] = "dnde" #To modify
+    >>> table.meta["SED_TYPE"] = "dnde"
     >>> flux_points = FluxPoints.from_table(table)
     >>> flux_points.plot(sed_type="flux") #doctest: +SKIP
 
@@ -251,7 +251,7 @@ class FluxPoints(FluxMaps):
             law spectrum of index 2 is assumed.
         gti : `GTI`
             Good time intervals. Default: None.
-        meta : dict
+        meta : `~gammapy.estimator.FluxMetaData` or dict
             Meta data.  Default: None.
 
         Returns
@@ -270,11 +270,6 @@ class FluxPoints(FluxMaps):
         if sed_type is None:
             raise ValueError("Specifying the sed type is required")
 
-        if "SED_TYPE" in table.meta and sed_type is not table.meta["SED_TYPE"]:
-            log.warning(
-                f"SED type in the table is '{table.meta['SED_TYPE']}', but '{sed_type}' is required"
-            )
-
         if sed_type == "likelihood":
             table = cls._convert_loglike_columns(table)
             if reference_model is None:
@@ -284,7 +279,6 @@ class FluxPoints(FluxMaps):
                 )
 
         maps = Maps()
-        # table.meta.setdefault("SED_TYPE", sed_type)
 
         for name in cls.all_quantities(sed_type=sed_type):
             if name in table.colnames:
@@ -292,19 +286,17 @@ class FluxPoints(FluxMaps):
                     table=table, colname=name, format=format
                 )
 
-        # meta = cls._get_meta_gadf(table)
-        # and inside, there is a meta["sed_type_init"] = table.meta.get("SED_TYPE")
-        meta_dict = table.meta if meta is None else meta
-        meta = FluxMetaData.from_dict(meta_dict)
-        if sed_type is not None:
-            meta.sed_type = meta.sed_type_init = sed_type
-        if meta.gtis is [None] and gti is not None:
-            meta.gtis = gti if type(gti) == list else [gti]
+        metadata = meta if meta else table.meta
+        if sed_type:
+            if isinstance(metadata, dict):
+                metadata["SED_TYPE"] = metadata["SEDTYPEI"] = sed_type
+            elif type(metadata) is FluxMetaData:
+                meta.sed_type = meta.sed_type_init = sed_type
 
         return cls.from_maps(
             maps=maps,
             reference_model=reference_model,
-            meta=meta,
+            meta=metadata,
             sed_type=sed_type,
             gti=gti,
         )
@@ -391,14 +383,17 @@ class FluxPoints(FluxMaps):
 
             idx = (Ellipsis, 0, 0)
             table = self.energy_axis.to_table(format="gadf-sed")
+            self.meta.to_table(table)
             table.meta["SED_TYPE"] = sed_type
 
             if not self.is_convertible_to_flux_sed_type:
                 table.remove_columns(["e_min", "e_max"])
 
-            if self.n_sigma_ul:
-                table.meta["UL_CONF"] = np.round(
-                    1 - 2 * stats.norm.sf(self.n_sigma_ul), 7
+            if self.meta.ul_conf:
+                table.meta["UL_CONF"] = str(self.meta.ul_conf)
+            elif self.meta.n_sigma_ul:
+                table.meta["UL_CONF"] = str(
+                    np.round(1 - 2 * stats.norm.sf(self.meta.n_sigma_ul), 7)
                 )
 
             if sed_type == "likelihood":
@@ -439,6 +434,8 @@ class FluxPoints(FluxMaps):
                 tables.append(table_flat)
 
             table = vstack(tables)
+            self.meta.to_table(table)
+            table.meta["SED_TYPE"] = sed_type
 
             # serialize with reference time set to mjd=0.0
             ref_time = Time(0.0, format="mjd", scale=time_axis.reference_time.scale)
@@ -467,6 +464,9 @@ class FluxPoints(FluxMaps):
                 data = getattr(self, quantity, None)
                 if data:
                     table[quantity] = data.quantity.squeeze()
+            self.meta.to_table(table)
+            table.meta["SED_TYPE"] = sed_type
+
         elif format == "profile":
             x_axis = self.geom.axes["projected-distance"]
 
@@ -486,6 +486,8 @@ class FluxPoints(FluxMaps):
                 tables.append(table_flat)
 
             table = vstack(tables)
+            self.meta.to_table(table)
+            table.meta["SED_TYPE"] = sed_type
 
         else:
             raise ValueError(f"Not a supported format {format}")
@@ -707,9 +709,9 @@ class FluxPoints(FluxMaps):
         >>> filename = '$GAMMAPY_DATA/tests/spectrum/flux_points/binlike.fits'
         >>> flux_points = FluxPoints.read(filename)
         >>> flux_points_recomputed = flux_points.recompute_ul(n_sigma_ul=3)
-        >>> print(flux_points.meta["n_sigma_ul"], flux_points.flux_ul.data[0])
+        >>> print(flux_points.meta.n_sigma_ul, flux_points.flux_ul.data[0])
         2.0 [[3.95451985e-09]]
-        >>> print(flux_points_recomputed.meta["n_sigma_ul"], flux_points_recomputed.flux_ul.data[0])
+        >>> print(flux_points_recomputed.meta.n_sigma_ul, flux_points_recomputed.flux_ul.data[0])
         3 [[6.22245374e-09]]
         """
 
@@ -731,5 +733,5 @@ class FluxPoints(FluxMaps):
             flux_points.norm_ul.data[idx] = stat_profile_ul_scipy(
                 value_scan, stat_scan, delta_ts=delta_ts, **kwargs
             )
-        flux_points.meta["n_sigma_ul"] = n_sigma_ul
+        flux_points.meta.n_sigma_ul = n_sigma_ul
         return flux_points
