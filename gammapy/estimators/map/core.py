@@ -156,8 +156,12 @@ class FluxMaps:
 
         if meta is None:
             meta = FluxMetaData.from_default()
+            meta.sed_type_init = "likelihood"
+        elif not isinstance(meta, FluxMetaData):
+            raise TypeError(
+                "Metada data should be a `~gammapy.estimators.FluxMetaData`"
+            )
 
-        meta.setdefault("sed_type_init", "likelihood")
         self.meta = meta
         self.gti = gti
         self._filter_success_nan = filter_success_nan
@@ -887,7 +891,7 @@ class FluxMaps:
             law spectrum of index 2 is assumed.
         gti : `~gammapy.data.GTI`
             Maps GTI information. Default: None.
-        meta : `~gammapy.estimator.FluxMetaData`
+        meta : `~gammapy.estimator.FluxMetaData` or dict
             Associated metadata. Default: None.
 
         Returns
@@ -903,8 +907,21 @@ class FluxMaps:
 
         cls._validate_data(data=maps, sed_type=sed_type)
 
+        metadata = None
+        if meta:
+            if isinstance(meta, dict):
+                metadata = FluxMetaData.from_dict(meta)
+            elif type(meta) is FluxMetaData:
+                metadata = meta
+            else:
+                raise TypeError(
+                    "Incorrect metadata type. Expect a dictionary or a `~gammapy.estimators.FluxMetaData`"
+                )
+
         if sed_type == "likelihood":
-            return cls(data=maps, reference_model=reference_model, gti=gti, meta=meta)
+            return cls(
+                data=maps, reference_model=reference_model, gti=gti, meta=metadata
+            )
 
         if reference_model is None:
             log.warning(
@@ -938,7 +955,7 @@ class FluxMaps:
             if key in maps:
                 data[key] = maps[key]
 
-        return cls(data=data, reference_model=reference_model, gti=gti, meta=meta)
+        return cls(data=data, reference_model=reference_model, gti=gti, meta=metadata)
 
     def to_hdulist(self, sed_type=None, hdu_bands=None):
         """Convert flux map to list of HDUs.
