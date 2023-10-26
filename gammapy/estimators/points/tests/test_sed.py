@@ -245,8 +245,8 @@ def test_run_pwl(fpe_pwl, tmpdir):
     actual = table["npred_excess"].data
     assert_allclose(actual, [[660.5625], [421.5402], [34.3258]], rtol=1e-3)
 
-    actual = table.meta["UL_CONF"]
-    assert_allclose(actual, 0.9544997)
+    actual = float(table.meta["UL_CONF"])
+    assert_allclose(actual, 0.9544997, rtol=1e-3)
 
     npred_excess_err = fp.npred_excess_err.data.squeeze()
     assert_allclose(npred_excess_err, [40.541334, 28.244024, 6.690005], rtol=1e-3)
@@ -263,7 +263,7 @@ def test_run_pwl(fpe_pwl, tmpdir):
     # test GADF I/O
     fp.write(tmpdir / "test.fits", format="gadf-sed")
     fp_new = FluxPoints.read(tmpdir / "test.fits")
-    assert fp_new.meta["sed_type_init"] == "likelihood"
+    assert fp_new.meta.sed_type_init == "likelihood"
 
 
 def test_run_ecpl(fpe_ecpl, tmpdir):
@@ -306,7 +306,7 @@ def test_run_ecpl(fpe_ecpl, tmpdir):
     # test GADF I/O
     fp.write(tmpdir / "test.fits", format="gadf-sed")
     fp_new = FluxPoints.read(tmpdir / "test.fits")
-    assert fp_new.meta["sed_type_init"] == "likelihood"
+    assert fp_new.meta.sed_type_init == "likelihood"
 
 
 @requires_data()
@@ -349,7 +349,7 @@ def test_run_map_pwl(fpe_map_pwl, tmpdir):
     # test GADF I/O
     fp.write(tmpdir / "test.fits", format="gadf-sed")
     fp_new = FluxPoints.read(tmpdir / "test.fits")
-    assert fp_new.meta["sed_type_init"] == "likelihood"
+    assert fp_new.meta.sed_type_init == "likelihood"
 
 
 @requires_data()
@@ -401,7 +401,7 @@ def test_flux_points_estimator_no_norm_scan(fpe_pwl, tmpdir):
     # test GADF I/O
     fp.write(tmpdir / "test.fits", format="gadf-sed")
     fp_new = FluxPoints.read(tmpdir / "test.fits")
-    assert fp_new.meta["sed_type_init"] == "likelihood"
+    assert fp_new.meta.sed_type_init == "likelihood"
 
 
 def test_no_likelihood_contribution():
@@ -523,7 +523,7 @@ def test_flux_points_recompute_ul(fpe_pwl):
         [[[2.93166296e-12]], [[1.05421128e-12]], [[1.22660055e-13]]],
         rtol=1e-3,
     )
-    assert fp1.meta["n_sigma_ul"] == 4
+    assert fp1.meta.n_sigma_ul == 4
 
     # check that it returns a sensible value
     fp2 = fp.recompute_ul(n_sigma_ul=2)
@@ -596,16 +596,16 @@ def test_fpe_non_uniform_datasets():
     energy_axis = MapAxis.from_energy_bounds("1 TeV", "10 TeV", nbin=10)
     geom_1 = RegionGeom.create("icrs;circle(0, 0, 0.1)", axes=[energy_axis])
     dataset_1 = SpectrumDataset.create(
-        geom=geom_1, meta_table=Table({"TELESCOP": ["CTA"]})
+        geom=geom_1, meta_table=Table({"INSTRU": ["CTA"]})
     )
 
     energy_axis = MapAxis.from_energy_bounds("1 TeV", "10 TeV", nbin=10)
     geom_2 = RegionGeom.create("icrs;circle(0, 0, 0.1)", axes=[energy_axis])
     dataset_2 = SpectrumDataset.create(
-        geom=geom_2, meta_table=Table({"TELESCOP": ["CTB"]})
+        geom=geom_2, meta_table=Table({"INSTRU": ["CTB"]})
     )
 
     fpe = FluxPointsEstimator(energy_edges=[1, 3, 10] * u.TeV)
 
-    with pytest.raises(ValueError, match="same value of the 'TELESCOP' meta keyword"):
+    with pytest.raises(ValueError, match="same value of the 'INSTRU' meta keyword"):
         fpe.run(datasets=[dataset_1, dataset_2])
