@@ -646,7 +646,7 @@ class Map(abc.ABC):
 
         weights = 1 if weights is None else weights
 
-        resampled = self._init_copy(data=None, geom=geom)
+        resampled = self._init_copy(data=None, geom=geom, meta=self.meta)
         resampled._resample_by_idx(
             idx, weights=self.data * weights, preserve_counts=preserve_counts
         )
@@ -720,7 +720,7 @@ class Map(abc.ABC):
         slices = tuple([slice(0, _) for _ in geom.data_shape])
         data = ufunc.reduceat(padded_array, indices=indices, axis=idx)[slices]
 
-        return self._init_copy(data=data, geom=geom)
+        return self._init_copy(data=data, geom=geom, meta=self.meta)
 
     def slice_by_idx(
         self,
@@ -1024,7 +1024,7 @@ class Map(abc.ABC):
         if preserve_counts:
             data *= geom.solid_angle().to_value("deg2")
 
-        return Map.from_geom(geom, data=data, unit=self.unit)
+        return Map.from_geom(geom, data=data, unit=self.unit, meta=self.meta)
 
     def reproject_to_geom(self, geom, preserve_counts=False, precision_factor=10):
         """Reproject map to input geometry.
@@ -1097,6 +1097,10 @@ class Map(abc.ABC):
                         axis_name=base_ax.name,
                     )
             output_map = output_map.resample(geom, preserve_counts=preserve_counts)
+
+        # Todo: METADATA to check
+        output_map.meta = self.meta
+
         return output_map
 
     def fill_events(self, events, weights=None):
@@ -1545,7 +1549,7 @@ class Map(abc.ABC):
             data = data * weights
 
         data = func.reduce(data, axis=idx, keepdims=keepdims, where=~np.isnan(data))
-        return self._init_copy(geom=geom, data=data)
+        return self._init_copy(geom=geom, data=data, meta=self.meta)
 
     def cumsum(self, axis_name):
         """Compute cumulative sum along a given axis
@@ -1580,7 +1584,9 @@ class Map(abc.ABC):
         )
         axes = self.geom.axes.replace(axis_shifted)
         geom = self.geom.to_image().to_cube(axes)
-        return self.__class__(geom=geom, data=data.value, unit=data.unit)
+        return self.__class__(
+            geom=geom, data=data.value, unit=data.unit, meta=self.meta
+        )
 
     def integral(self, axis_name, coords, **kwargs):
         """Compute integral along a given axis
@@ -1657,7 +1663,6 @@ class Map(abc.ABC):
             geom = geom.drop(axis_name=axis_name)
 
         data = []
-
         for m in maps:
             if axis_name:
                 m_geom = m.geom.drop(axis_name=axis_name)
@@ -1670,7 +1675,10 @@ class Map(abc.ABC):
             data.append(m.quantity.to_value(maps[0].unit))
 
         return cls.from_geom(
-            data=np.stack(data), geom=geom.to_cube(axes=[axis]), unit=maps[0].unit
+            data=np.stack(data),
+            geom=geom.to_cube(axes=[axis]),
+            unit=maps[0].unit,
+            meta=maps[0].meta,
         )
 
     def split_by_axis(self, axis_name):
@@ -1744,6 +1752,7 @@ class Map(abc.ABC):
         if not self.geom.has_energy_axis:
             raise ValueError("Energy axis required")
 
+        # ToDo: what about the metadata
         return self.to_region_nd_map(region=region, func=func, weights=weights)
 
     def to_unit(self, unit):
@@ -1760,7 +1769,7 @@ class Map(abc.ABC):
             Map with new unit and converted data
         """
         data = self.quantity.to_value(unit)
-        return self.from_geom(self.geom, data=data, unit=unit)
+        return self.from_geom(self.geom, data=data, unit=unit, meta=self.meta)
 
     def is_allclose(self, other, rtol_axes=1e-3, atol_axes=1e-6, **kwargs):
         """Compare two Maps for close equivalency
