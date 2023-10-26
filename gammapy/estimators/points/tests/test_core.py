@@ -206,8 +206,11 @@ class TestFluxPoints:
         actual = FluxPoints.read(tmp_path / "tmp.fits")
         actual._data.pop("is_ul", None)
         flux_points._data.pop("is_ul", None)
+
         assert actual.gti.time_start[0] == gti.time_start[0]
         assert str(flux_points) == str(actual)
+        assert flux_points.meta.sed_type_init == actual.meta.sed_type_init
+        assert_quantity_allclose(flux_points.meta.ul_conf, actual.meta.ul_conf)
 
     def test_write_ecsv(self, tmp_path, flux_points):
         flux_points.write(
@@ -259,7 +262,10 @@ def test_flux_points_single_bin_dnde():
     table = Table.read(path)
 
     table_single_bin = table[1:2]
-    fp = FluxPoints.from_table(table_single_bin, sed_type="dnde")
+    fp = FluxPoints.from_table(table_single_bin)
+
+    assert fp.meta.sed_type == "dnde"
+    assert_allclose(fp.meta.n_sigma_ul, 2.0, rtol=0.001)
 
     with pytest.raises(ValueError):
         _ = fp.flux_ref
