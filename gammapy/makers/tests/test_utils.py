@@ -7,7 +7,14 @@ from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 from regions import PointSkyRegion
-from gammapy.data import GTI, DataStore, EventList, FixedPointingInfo, Observation
+from gammapy.data import (
+    GTI,
+    DataStore,
+    EventList,
+    FixedPointingInfo,
+    Observation,
+    observatory_locations,
+)
 from gammapy.irf import (
     Background2D,
     Background3D,
@@ -26,6 +33,7 @@ from gammapy.makers.utils import (
     make_map_exposure_true_energy,
     make_observation_time_map,
     make_theta_squared_table,
+    get_obstime_RA_from_GTI,
 )
 from gammapy.maps import HpxGeom, MapAxis, RegionGeom, WcsGeom, WcsNDMap
 from gammapy.modeling.models import ConstantSpectralModel
@@ -653,3 +661,13 @@ def test_make_effective_livetime_map():
     assert_allclose(obs_time_offset, [0, 0.242814], rtol=1e-3)
 
     assert obs_time.unit == u.hr
+
+
+@requires_data()
+def test_get_obstime_RA_from_GTI():
+    gti = GTI.read("$GAMMAPY_DATA/fermi-3fhl-gc/fermi-3fhl-gc-events.fits.gz")
+    observatory_location = observatory_locations["hawc"]
+    obsra_table = get_obstime_RA_from_GTI(gti, observatory_location, 15 * u.deg)
+    assert len(obsra_table) == 24
+    assert_allclose(obsra_table["tobs"][2], 7602395.786, rtol=1e-2)
+    assert_allclose(obsra_table["ra_min"][1], 15, rtol=1e-2)
