@@ -3,7 +3,7 @@ import logging
 import warnings
 import numpy as np
 import astropy.units as u
-from astropy.coordinates import Angle
+from astropy.coordinates import Angle, SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 from gammapy.data import FixedPointingInfo
@@ -25,6 +25,7 @@ __all__ = [
     "make_theta_squared_table",
     "make_effective_livetime_map",
     "make_observation_time_map",
+    "get_obstime_RA_from_GTI",
 ]
 
 log = logging.getLogger(__name__)
@@ -769,7 +770,6 @@ def guess_instrument_fov(obs):
     Guess the camera field of view for the given observation
     from the IRFs. This simply takes the maximum offset of the
     effective area IRF.
-    TODO: This logic will break for more complex IRF models.
     A better option would be to compute the offset at which
     the effective area is above 10% of the maximum.
 
@@ -782,7 +782,12 @@ def guess_instrument_fov(obs):
     -------
     offset_max : `~astropy.units.quantity.Quantity`
         The maximum offset of the effective area IRF.
+
+    Notes
+    -----
+    This function will break for more complex IRF models.
     """
+    # TODO: This logic will break for more complex IRF models.
 
     if "aeff" not in obs.available_irfs:
         raise ValueError("No Effective area IRF to infer the FoV from")
@@ -791,3 +796,58 @@ def guess_instrument_fov(obs):
     if "offset" not in obs.aeff.axes.names:
         raise ValueError("Offset axis not present!")
     return obs.aeff.axes["offset"].center[-1]
+
+
+def get_obstime_RA_from_GTI(gti, observatory_location, ra_step=1 * u.deg):
+    """
+    For :term:`WCD` detectors, it computes the observation time in each band in Right Ascension
+    (from 0 to 360deg) from the taken time intervals of an observatory.
+
+    The observation time does not account for dead time, if any.
+
+    Parameters
+    ----------
+    gti: `~gammapy.data.GTI`
+        Time intervals used to compute the observation times in RA bands.
+    observatory_location: `~astropy.coordinates.EarthLocationEarthLocation`
+        Location of the observatory.
+    ra_step : `~astropy.units.Quantity`, optional
+        Width of the Right Ascension bands. Default value is 1deg.
+
+    Returns
+    -------
+    obsra_table : `~astropy.table.Table`
+        Table containing the RA band values ('ra_min', 'ra_max'; unit: deg) and the observation time ('tobs'; unit: s).
+
+    Notes
+    -----
+    This function works only for WCD detectors. No deadtime is considered for now.
+    """
+    # TODO: generalised this function for neutrino detectors
+    ra_bands_lo = np.arange(0, 360 + ra_step.value, ra_step.value)
+    seconds_in_ra_band = np.zeros(len(ra_bands_lo) - 1)
+
+    tinterval = gti.time_delta
+    tmid = gti.time_start + tinterval / 2
+
+    for idx in range(len(gti.table)):
+        ramid = SkyCoord(
+            alt=90 * u.deg,
+            az=0 * u.deg,
+            location=observatory_location,
+            obstime=tmid[idx],
+            frame="altaz",
+        )
+        ra = ramid.transform_to("icrs").ra.deg
+        for ira in np.arange(len(ra_bands_lo) - 1):
+            if ra > ra_bands_lo[ira] and ra < ra_bands_lo[ira + 1]:
+                seconds_in_ra_band[ira] += tinterval[idx].value
+
+    obsra_table = Table(
+        [ra_bands_lo[:-1], ra_bands_lo[1:], seconds_in_ra_band],
+        names=("ra_min", "ra_max", "tobs"),
+        dtype=(np.float32, np.float32, np.float64),
+        units=(u.deg, u.deg, u.s),
+    )
+
+    return obsra_table
