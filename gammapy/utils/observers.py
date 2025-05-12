@@ -3,6 +3,7 @@
 
 import astropy.units as u
 from astropy.coordinates import EarthLocation
+import numpy as np
 
 __all__ = ["observatory_locations"]
 
@@ -20,9 +21,14 @@ Not that with ``EarthLocation`` the orientation of angles is as follows:
 
 Available observatories (alphabetical order):
 
+- ``astri`` for ASTRI, see
+  `Website <http://www.astri.inaf.it/en/>`__
+- ``cat`` for CAT, see
+  `A. Barrau et al., Nucl.Instrum.Meth. A416 (1998) 278-292 <https://arxiv.org/abs/astro-ph/9804046>`__
 - ``ctao_south`` and ``ctao_north`` for CTAO, see
   `Website <https://www.ctao-observatory.org/>`__ and
   `Wikipedia <https://en.wikipedia.org/wiki/Cherenkov_Telescope_Array_Observatory>`__
+- ``fact for FACT
 - ``hawc`` for HAWC, see
   `Website <https://www.hawc-observatory.org/>`__ and
   `Wikipedia <https://en.wikipedia.org/wiki/High_Altitude_Water_Cherenkov_Experiment>`__
@@ -35,6 +41,7 @@ Available observatories (alphabetical order):
   `Wikipedia <https://en.wikipedia.org/wiki/MAGIC_(telescope)>`__
 - ``milagro`` for MILAGRO, see
   `Wikipedia <https://en.wikipedia.org/wiki/Milagro_(experiment)>`__)
+- ``swgo`` for SWGO, taken in `pyswgo`
 - ``veritas`` for VERITAS, see
   `Website <https://veritas.sao.arizona.edu/>`__ and
   `Wikipedia <https://en.wikipedia.org/wiki/VERITAS>`__
@@ -113,4 +120,18 @@ observatory_locations["fact"] = EarthLocation(
     lat=28.761647 * u.deg,
     lon=-17.891116 * u.deg,
     height=2200 * u.m,
+)
+
+# coordinates from CAT (based on Nucl.Instrum.Meth. A416 (1998) 278-292)
+observatory_locations["cat"] = EarthLocation(
+    lat=42.5 * u.deg,
+    lon=-1.97 * u.deg,
+    height=1650.0 * u.m,
+)
+
+# coordinates from SWGO (based on pyswgo)
+observatory_locations["swgo"] = EarthLocation(
+    lat=np.rad2deg(0.3314822615106422) * u.deg,
+    lon=np.rad2deg(-1.6983458175965906) * u.deg,
+    height=4096.0 * u.m,
 )
