@@ -1277,17 +1277,18 @@ class TemplateSpatialModel(SpatialModel):
     map : `~gammapy.maps.Map`
         Map template.
     meta : dict, optional
-        Meta information, meta['filename'] will be used for serialisation.
+        Meta information, meta['filename'] will be used for serialisation. Default is None.
     normalize : bool
-        Normalize the input map so that it integrates to unity.
+        Normalize the input map so that it integrates to unity. Default is True.
     interp_kwargs : dict
         Interpolation keyword arguments passed to `gammapy.maps.Map.interp_by_coord`.
         Default arguments are {'method': 'linear', 'fill_value': 0, "values_scale": "log"}.
     filename : str
-        Name of the map file.
+        Name of the map file. Default is None.
     copy_data : bool
-        Create a deepcopy of the map data or directly use the original. Default is True.
-        Use False to save memory in case of large maps.
+        Create a deepcopy of the map data or directly use the original. Use False to save
+        memory in case of large maps.
+        Default is True.
     **kwargs : dict
         Keyword arguments forwarded to `SpatialModel.__init__`.
     """
