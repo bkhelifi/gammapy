@@ -167,7 +167,7 @@ class Datasets(collections.abc.MutableSequence):
 
     @property
     def models(self):
-        """Unique models (`~gammapy.modeling.Models`).
+        """Unique models (`~gammapy.modeling.models.Models`).
 
         Duplicate model objects have been removed.
         The order of the unique models remains.
@@ -187,7 +187,7 @@ class Datasets(collections.abc.MutableSequence):
 
     @models.setter
     def models(self, models):
-        """Unique models (`~gammapy.modeling.Models`).
+        """Unique models (`~gammapy.modeling.models.Models`).
 
         Duplicate model objects have been removed.
         The order of the unique models remains.
