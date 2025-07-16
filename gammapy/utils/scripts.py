@@ -104,6 +104,11 @@ def to_yaml(dictionary, sort_keys=False):
         Python dictionary.
     sort_keys : bool, optional
         Whether to sort keys. Default is False.
+
+    Returns
+    -------
+    data : dict
+        YAML file content as a dictionary.
     """
     from gammapy.utils.metadata import CreatorMetaData
 
