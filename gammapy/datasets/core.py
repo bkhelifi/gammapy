@@ -134,9 +134,11 @@ class Datasets(collections.abc.MutableSequence):
     ----------
     datasets : `Dataset` or list of `Dataset`
         Datasets.
+    meta : `dict`, optional
+        Dictionary to store metadata. Default is None.
     """
 
-    def __init__(self, datasets=None):
+    def __init__(self, datasets=None, meta=None):
         if datasets is None:
             datasets = []
 
@@ -155,6 +157,11 @@ class Datasets(collections.abc.MutableSequence):
 
         self._datasets = datasets
         self._covariance = None
+
+        if meta is None:
+            self.meta = {}
+        else:
+            self.meta = meta
 
     @property
     def parameters(self):
@@ -446,8 +453,10 @@ class Datasets(collections.abc.MutableSequence):
             dataset_cls = DATASET_REGISTRY.get_cls(data["type"])
             dataset = dataset_cls.from_dict(data, lazy=lazy, cache=cache)
             datasets.append(dataset)
-
         datasets = cls(datasets)
+
+        if "metadata" in data_list:
+            datasets.meta = data_list["metadata"]
 
         if filename_models:
             datasets.models = Models.read(filename_models, checksum=checksum)
