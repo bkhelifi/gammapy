@@ -457,9 +457,11 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
         Sky models.
     covariance_data : `~numpy.ndarray`
         Covariance data.
+    meta : `dict`, optional
+        Dictionary to store metadata. Default is None.
     """
 
-    def __init__(self, models=None, covariance_data=None):
+    def __init__(self, models=None, covariance_data=None, meta=None):
         if models is None:
             models = []
 
@@ -490,6 +492,11 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
         if covariance_data is not None:
             self.covariance = covariance_data
 
+        if meta is None:
+            self.meta = {}
+        else:
+            self.meta = meta
+
     @property
     def parameters(self):
         """Parameters as a `~gammapy.modeling.Parameters` object."""
@@ -513,7 +520,7 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
 
     @property
     def background_models(self):
-        """Dictionnary mapping of dataset names with their associated `~gammapy.modeling.models.FoVBackgroundModel` names."""
+        """Dictionary mapping of dataset names with their associated `~gammapy.modeling.models.FoVBackgroundModel` names."""
         return self._background_models
 
     @classmethod
@@ -526,10 +533,19 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
             input filename
         checksum : bool, optional
             Whether to perform checksum verification. Default is False.
+
+        Returns
+        -------
+        datasetmodels : `~gammapy.modeling.models.DatasetModels`
+            Dataset models.
         """
         yaml_str = make_path(filename).read_text()
         path, filename = split(filename)
-        return cls.from_yaml(yaml_str, path=path, checksum=checksum)
+        print("BKH0")
+        print(cls.__class__)
+        aa = cls.from_yaml(yaml_str, path=path, checksum=checksum)
+        print(f"NK1 {aa.meta}")
+        return aa
 
     @classmethod
     def from_yaml(cls, yaml_str, path="", checksum=False):
@@ -544,11 +560,14 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
         checksum : bool, optional
             Whether to perform checksum verification. Default is False.
 
-
+        Returns
+        -------
+        datasetmodels : `~gammapy.modeling.models.DatasetModels`
+            Dataset models.
         """
         data = from_yaml(yaml_str, checksum=checksum)
-        # TODO : for now metadata are not kept. Add proper metadata creation.
-        data.pop("metadata", None)
+        # # TODO : for now metadata are not kept. Add proper metadata creation.
+        # data.pop("metadata", None)
         return cls.from_dict(data, path=path)
 
     @classmethod
@@ -567,6 +586,12 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
             models.append(model)
         models = cls(models)
 
+        print("BKH models from_dict")
+
+        if "metadata" in data:
+            models.meta = data["metadata"]
+        print(f"BKH models.meta={models.meta}")
+
         if "covariance" in data:
             filename = data["covariance"]
             if not (path / filename).exists():
@@ -575,6 +600,7 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
 
         _set_models_link(models)
 
+        print(f"BKH models.meta2={models.meta}")
         return models
 
     def write(

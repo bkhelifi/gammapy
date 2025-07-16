@@ -435,7 +435,7 @@ class Datasets(collections.abc.MutableSequence):
 
         Returns
         -------
-        dataset : `gammapy.datasets.Datasets`
+        dataset : `~gammapy.datasets.Datasets`
             Datasets.
         """
         from . import DATASET_REGISTRY
@@ -459,7 +459,13 @@ class Datasets(collections.abc.MutableSequence):
             datasets.meta = data_list["metadata"]
 
         if filename_models:
-            datasets.models = Models.read(filename_models, checksum=checksum)
+            print("BKH models read")
+            # datasets.models
+            aa = Models.read(filename_models, checksum=checksum)
+            datasets.models = aa
+            datasets.models.meta = aa.meta
+            print(f" after ds.Models.read {datasets.models.meta}")
+            print(datasets.models.__class__)
 
         return datasets
 

@@ -200,6 +200,26 @@ class CreatorMetaData(MetaData):
         """Change creation date to Time.now()"""
         self.date = Time.now()
 
+    def from_dict(self, text):
+        """Creation of the metadata from a dictionary
+
+        Parameters
+        ----------
+        text : str
+            yaml str
+
+        Returns
+        -------
+        metadata : `CreatorMetaData`
+            The creator metadata object
+        """
+
+        creator = text["creator"] if "creator" in text else f"Gammapy {version}"
+        date = text["date"] if "date" in text else Time.now
+        origin = text["origin"] if "origin" in text else None
+        metadata = CreatorMetaData(creator=creator, date=date, origin=origin)
+        return metadata
+
 
 class ObsInfoMetaData(MetaData):
     """General metadata information about the observation.
