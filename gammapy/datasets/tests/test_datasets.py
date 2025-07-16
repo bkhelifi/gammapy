@@ -120,7 +120,7 @@ def test_datasets_info_table():
 
 
 @requires_data()
-def test_datasets_write(tmp_path):
+def test_datasets_io(tmp_path):
     axis = MapAxis.from_energy_bounds("0.1 TeV", "10 TeV", nbin=2)
     geom = WcsGeom.create(
         skydir=(266.40498829, -28.93617776),
@@ -145,19 +145,33 @@ def test_datasets_write(tmp_path):
     model = SkyModel.create("pl", "point", name="src")
     model.spatial_model.position = SkyCoord("266d", "-28.93d", frame="icrs")
 
-    dataset_1.models = [model]
+    dataset_1.models = [model, FoVBackgroundModel(dataset_name=dataset_1.name)]
+    dataset_1.fake()
 
+    fit = Fit()
+    fit.run(datasets)
+
+    print(tmp_path / "test")
     datasets.write(
-        filename=tmp_path / "test",
-        filename_models=tmp_path / "test_model",
+        filename=tmp_path / "test.yaml",
+        filename_models=tmp_path / "test_model.yaml",
         overwrite=False,
+        checksum=True,
     )
-    os.remove(tmp_path / "test-1.fits")
 
+    ds = Datasets.read(
+        filename=tmp_path / "test.yaml",
+        filename_models=tmp_path / "test_model.yaml",
+    )
+    assert ds.names[0] == "test-1"
+    assert len(ds.models) == 2
+    assert ds.models.covariance.data.ndim == 2
+
+    os.remove(tmp_path / "test-1.fits")
     with pytest.raises(OSError):
         datasets.write(
-            filename=tmp_path / "test",
-            filename_models=tmp_path / "test_model",
+            filename=tmp_path / "test.yaml",
+            filename_models=tmp_path / "test_model.yaml",
             overwrite=False,
         )
 
