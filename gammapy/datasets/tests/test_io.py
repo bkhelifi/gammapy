@@ -1,8 +1,10 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
+import os
 import warnings
 import pytest
 from numpy.testing import assert_allclose
 import astropy.units as u
+from astropy.coordinates import SkyCoord
 from regions import CircleSkyRegion
 from gammapy.datasets import (
     Datasets,
@@ -11,8 +13,12 @@ from gammapy.datasets import (
     FermipyDatasetsReader,
 )
 from gammapy.modeling.models import DatasetModels
+from gammapy.datasets.tests.test_map import get_map_dataset
 from gammapy.utils.scripts import make_path
 from gammapy.utils.testing import requires_data
+from gammapy.maps import MapAxis, WcsGeom
+from gammapy.modeling import Fit
+from gammapy.modeling.models import FoVBackgroundModel, SkyModel
 
 
 @requires_data()
@@ -88,6 +94,62 @@ def test_datasets_to_io(tmp_path):
 
     dataset_copy = dataset0.copy(name="dataset0-copy")
     assert dataset_copy.models is None
+
+
+def test_datasets_io(tmp_path):
+    axis = MapAxis.from_energy_bounds("0.1 TeV", "10 TeV", nbin=2)
+    geom = WcsGeom.create(
+        skydir=(266.40498829, -28.93617776),
+        binsz=0.02,
+        width=(2, 2),
+        frame="icrs",
+        axes=[axis],
+    )
+
+    axis = MapAxis.from_energy_bounds("0.1 TeV", "10 TeV", nbin=3, name="energy_true")
+    geom_etrue = WcsGeom.create(
+        skydir=(266.40498829, -28.93617776),
+        binsz=0.02,
+        width=(2, 2),
+        frame="icrs",
+        axes=[axis],
+    )
+
+    dataset_1 = get_map_dataset(geom, geom_etrue, name="test-1")
+    datasets = Datasets([dataset_1])
+
+    model = SkyModel.create("pl", "point", name="src")
+    model.spatial_model.position = SkyCoord("266d", "-28.93d", frame="icrs")
+
+    dataset_1.models = [model, FoVBackgroundModel(dataset_name=dataset_1.name)]
+    dataset_1.fake()
+
+    fit = Fit()
+    fit.run(datasets)
+
+    print(tmp_path / "test")
+    datasets.write(
+        filename=tmp_path / "test.yaml",
+        filename_models=tmp_path / "test_model.yaml",
+        overwrite=False,
+        checksum=True,
+    )
+
+    ds = Datasets.read(
+        filename=tmp_path / "test.yaml",
+        filename_models=tmp_path / "test_model.yaml",
+    )
+    assert ds.names[0] == "test-1"
+    assert len(ds.models) == 2
+    assert ds.models.covariance.data.ndim == 2
+
+    os.remove(tmp_path / "test-1.fits")
+    with pytest.raises(OSError):
+        datasets.write(
+            filename=tmp_path / "test.yaml",
+            filename_models=tmp_path / "test_model.yaml",
+            overwrite=False,
+        )
 
 
 @requires_data()
