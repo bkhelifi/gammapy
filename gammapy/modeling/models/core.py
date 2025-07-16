@@ -526,6 +526,11 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
             input filename
         checksum : bool, optional
             Whether to perform checksum verification. Default is False.
+
+        Returns
+        -------
+        datasetmodels : `~gammapy.modeling.models.DatasetModels`
+            Dataset models.
         """
         yaml_str = make_path(filename).read_text()
         path, filename = split(filename)
@@ -544,7 +549,10 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
         checksum : bool, optional
             Whether to perform checksum verification. Default is False.
 
-
+        Returns
+        -------
+        datasetmodels : `~gammapy.modeling.models.DatasetModels`
+            Dataset models.
         """
         data = from_yaml(yaml_str, checksum=checksum)
         # TODO : for now metadata are not kept. Add proper metadata creation.
@@ -571,7 +579,12 @@ class DatasetModels(collections.abc.Sequence, CovarianceMixin):
             filename = data["covariance"]
             if not (path / filename).exists():
                 path, filename = split(filename)
-            models.read_covariance(path, filename, format="ascii.fixed_width")
+            try:
+                models.read_covariance(path, filename, format="ascii.fixed_width")
+            except ValueError:
+                log.warning(
+                    "Impossible to read the covariance! It might be due to a bad or old format"
+                )
 
         _set_models_link(models)
 
