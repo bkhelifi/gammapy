@@ -166,6 +166,7 @@ def test_datasets_io(tmp_path):
     assert ds.names[0] == "test-1"
     assert len(ds.models) == 2
     assert ds.models.covariance.data.ndim == 2
+    assert "dev" in ds.meta["creator"]
 
     os.remove(tmp_path / "test-1.fits")
     with pytest.raises(OSError):
