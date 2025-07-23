@@ -145,15 +145,16 @@ class FluxMaps:
         * acceptance_off : optional, acceptance from the off region
         * acceptance_on : optional, acceptance from the on region
 
-    reference_model : `~gammapy.modeling.models.SkyModel`, optional
+    reference_model : `~gammapy.modeling.models.SkyModel`
         The reference model to use for conversions. If None, a model consisting
         of a point source with a power law spectrum of index 2 is assumed.
     meta : dict, optional
-        Dict of metadata.
+        Dict of metadata.  Default is None.
     gti : `~gammapy.data.GTI`, optional
-        Maps GTI information.
+        Maps GTI information. Default is None.
     filter_success_nan : boolean, optional
         Set fitted norm and error to NaN when the fit has not succeeded.
+        Default is True.
     """
 
     _expand_slice = (slice(None), np.newaxis, np.newaxis)
