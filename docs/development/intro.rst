@@ -55,13 +55,13 @@ Four solutions exist:
 
 1. You add this message by hand into each of your commit messages (not recommended)
 
-2. You can sign each of your commits with the command: "``git commit -s``".
+2. You can sign each of your commits with the command: ``git commit -s``.
 
-If you have authored a commit that is missing its ‘Signed-off-by’ line, you can amend your commits and push them to
-GitHub: "``git commit --amend --no-edit --signoff``"
-(see also this `How To <https://github.com/src-d/guide/blob/master/developer-community/fix-DCO.md#how-to-add-sign-offs-retroactively>`_).
+    * If you have authored a commit that is missing its ‘Signed-off-by’ line, you can amend your commits and push them to
+     GitHub: ``git commit --amend --no-edit --signoff``
+     (see also this `How To <https://github.com/src-d/guide/blob/master/developer-community/fix-DCO.md#how-to-add-sign-offs-retroactively>`_).
 
-3. You can make an alias of the command "``git commit -s``", e.g.
+3. You can make an alias of the command ``git commit -s``, e.g.
 
 ``alias gcs 'git commit -s'``
 
@@ -304,7 +304,7 @@ environments can be listed using:
     tox --listenvs
 
 However for most contributions testing with the standard ``tox -e test`` command is sufficient.
-Additional arguments for ``pytest`` can be passed after `--`:
+Additional arguments for ``pytest`` can be passed after ``--``:
 
 .. code-block:: bash
 
@@ -330,20 +330,3 @@ Finally to make a completely clean folder for build the documentation you can ru
 .. code-block:: bash
 
     make clean-repo
-
-..
-
-    **Make a working example**
-
-    * Explain "documentation driven development" and "test driven development"
-
-    * make a branch
-    * test in ``examples``
-    * ``import IPython; IPython.embed`` trick
-
-    **Contribute with Jupyter notebooks**
-
-    * check tests with user tutorials environment: `gammapy jupyter --src mynotebook.ipynb test --tutor`
-    * strip the output cells: `gammapy jupyter --src mynotebook.ipynb strip`
-    * clean format code cells: `gammapy jupyter --src mynotebook.ipynb  black`
-    * diff stripped notebooks: `git diff mynotbeook.pynb`
