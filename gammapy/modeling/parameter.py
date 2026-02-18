@@ -244,14 +244,8 @@ class Parameter:
         """Minimum as a float."""
         from .models import UniformPrior, LogUniformPrior
 
-        # Dynamic sync: if parameter has bounded prior and no explicit min set
-        if (
-            hasattr(self, "_prior")
-            and isinstance(self._prior, (UniformPrior, LogUniformPrior))
-            and np.isnan(self._min)
-        ):
-            return self._prior.min.value
-
+        if isinstance(self.prior, (UniformPrior, LogUniformPrior)):
+            return self.prior.min.value
         return self._min
 
     @min.setter
@@ -276,14 +270,8 @@ class Parameter:
         """Maximum as a float."""
         from .models import UniformPrior, LogUniformPrior
 
-        # Dynamic sync: if parameter has bounded prior and no explicit max set
-        if (
-            hasattr(self, "_prior")
-            and isinstance(self._prior, (UniformPrior, LogUniformPrior))
-            and np.isnan(self._max)
-        ):
-            return self._prior.max.value
-
+        if isinstance(self.prior, (UniformPrior, LogUniformPrior)):
+            return self.prior.max.value
         return self._max
 
     @max.setter
