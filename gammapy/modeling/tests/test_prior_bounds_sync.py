@@ -1,6 +1,4 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-"""Tests for dynamic synchronization between parameter bounds and prior bounds."""
-
 import numpy as np
 from numpy.testing import assert_allclose
 from gammapy.modeling import Parameter
