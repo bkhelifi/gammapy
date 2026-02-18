@@ -1,1 +1,1 @@
-Fixed an issue where ``UniformPrior`` and ``LogUniformPrior`` without explicit parameter ``min`` / ``max`` caused Minuit to hit infinite likelihood and fail. Parameter bounds now sync dynamically with the prior bounds.
+``Parameter`` bounds now sync dynamically with ``UniformPrior`` and ``LogUniformPrior`` bounds to prevent Minuit from hitting infinite likelihood. Fixes #6397.
