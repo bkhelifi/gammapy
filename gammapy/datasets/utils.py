@@ -448,10 +448,9 @@ class set_and_restore_mask_fit:
     round_to_edge: bool, optional
         Whether to round `energy_min` and `energy_max` to the closest axis bin value.
         See `~gammapy.maps.MapAxis.round`. Default is False.
-    operator : {np.logical_and, np.logical_or, None}
-        Operator to apply between to existing mask_fit on the dataset and the new one.
-        Default is np.logical_and. If None the existing mask_fit is ignored.
-
+    operator : {`np.logical_and`, `np.logical_or`, None}, optional
+        Operator to apply between to existing dataset.mask_fit and the new one.
+        Default is `np.logical_and`. If None the existing mask_fit is ignored.
     """
 
     def __init__(
