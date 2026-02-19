@@ -1,1 +1,1 @@
-``Parameter`` bounds now sync dynamically with ``UniformPrior`` and ``LogUniformPrior`` bounds to prevent Minuit from hitting infinite likelihood. Fixes #6397.
+`~gammapy.modeling.Parameter` bounds now synchronized dynamically with `~gammapy.modeling.models.UniformPrior` and `~gammapy.modeling.models.LogUniformPrior` bounds to prevent Minuit from hitting infinite likelihood. 
