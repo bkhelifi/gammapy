@@ -1845,12 +1845,9 @@ class Map(abc.ABC):
             Map with new unit and converted data.
         """
         unit = u.Unit(unit)
-        # TODO: this supports only simple scalings: use Unit.get_converter() in astropy>=6.1
-        try:
-            scale = self.unit._to(unit)
-        except u.UnitsError:
-            raise u.UnitConversionError(f"Cannot scale {self.unit} to {unit}")
-        return self.from_geom(self.geom, data=self.data * scale, unit=unit)
+        # This will raise a UnitConversionError
+        converter = self.unit.get_converter(unit)
+        return self.from_geom(self.geom, data=converter(self.data), unit=unit)
 
     def is_allclose(self, other, rtol_axes=1e-3, atol_axes=1e-6, **kwargs):
         """Compare two Maps for close equivalency.
