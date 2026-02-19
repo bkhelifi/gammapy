@@ -438,8 +438,8 @@ class set_and_restore_mask_fit:
     ----------
     datasets : `~gammapy.datasets.datasets`
         the Datasets to apply the energy mask to.
-    mask_fit : `~astropy.unit
-        New mask to apply. Has to be the same
+    mask_fit : `~gammapy.maps.Map`, optional
+        New mask to apply.
         Default if  None.
     energy_min : `~astropy.units.Quantity`, optional
         minimum energy.
@@ -478,14 +478,15 @@ class set_and_restore_mask_fit:
                 self.energy_min, self.energy_max, self.round_to_edge
             )
             if self.mask_fit is not None:
-                mask_fit *= self.mask_fit.interp_to_geom(
+                mask_fit &= self.mask_fit.interp_to_geom(
                     mask_fit.geom, method="nearest"
                 )
 
-            if self.operator is None or dataset.mask_fit is None:
-                dataset.mask_fit = mask_fit
-            else:
-                dataset.mask_fit = self.operator(dataset.mask_fit, mask_fit)
+            if not (self.operator is None or dataset.mask_fit is None):
+                mask_fit = Map.from_geom(
+                    mask_fit.geom, data=self.operator(dataset.mask_fit, mask_fit)
+                )
+            dataset.mask_fit = mask_fit
 
             if np.any(mask_fit.data):
                 datasets.append(dataset)
