@@ -638,10 +638,7 @@ class FermipyDatasetsReader(DatasetReader):
         filename = self.filename.resolve()
         data = read_yaml(filename)
 
-        if "components" in data:
-            components = data["components"]
-        else:
-            components = [data]
+        components = self._get_components(data)
 
         datasets = Datasets()
         for file_id, component in enumerate(components):
@@ -655,10 +652,12 @@ class FermipyDatasetsReader(DatasetReader):
                 path = Path(filename.parent) / path
 
             if "model" in component and "isodiff" in component["model"]:
-                isotropic_file = Path(component["model"]["isodiff"])
+                filename = self._get_iso_filename(component["model"]["isodiff"])
+                isotropic_file = Path(filename)
                 name = isotropic_file.stem[4:]
             elif "model" in data and "isodiff" in data["model"]:
-                isotropic_file = Path(data["model"]["isodiff"])
+                filename = self._get_iso_filename(data["model"]["isodiff"])
+                isotropic_file = Path(filename)
                 name = isotropic_file.stem[4:]
             else:
                 isotropic_file = None
@@ -677,3 +676,33 @@ class FermipyDatasetsReader(DatasetReader):
                 )
             )
         return datasets
+
+    @staticmethod
+    def _get_components(data):
+        if (
+            "components" in data
+            and isinstance(data["components"], list)
+            and len(data["components"]) > 0
+        ):
+            components = data["components"]
+        else:
+            components = [data]
+        return components
+
+    @staticmethod
+    def _get_iso_filename(data):
+        if isinstance(data, list):
+            if len(data) == 1:
+                if isinstance(data[0], str):
+                    return data[0]
+                else:
+                    raise ValueError("Invalid isodiff filename.")
+            else:
+                raise ValueError(
+                    "Only one isodiff filename per component should be given."
+                )
+        else:
+            if isinstance(data, str):
+                return data
+            else:
+                raise ValueError("Invalid isodiff filename.")
