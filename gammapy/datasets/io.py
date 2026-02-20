@@ -652,12 +652,10 @@ class FermipyDatasetsReader(DatasetReader):
                 path = Path(filename.parent) / path
 
             if "model" in component and "isodiff" in component["model"]:
-                filename = self._get_iso_filename(component["model"]["isodiff"])
-                isotropic_file = Path(filename)
+                isotropic_file = self._get_isodiff(component["model"]["isodiff"])
                 name = isotropic_file.stem[4:]
             elif "model" in data and "isodiff" in data["model"]:
-                filename = self._get_iso_filename(data["model"]["isodiff"])
-                isotropic_file = Path(filename)
+                isotropic_file = self._get_isodiff(data["model"]["isodiff"])
                 name = isotropic_file.stem[4:]
             else:
                 isotropic_file = None
@@ -690,11 +688,11 @@ class FermipyDatasetsReader(DatasetReader):
         return components
 
     @staticmethod
-    def _get_iso_filename(data):
+    def _get_isodiff(data):
         if isinstance(data, list):
             if len(data) == 1:
                 if isinstance(data[0], str):
-                    return data[0]
+                    return Path(data[0])
                 else:
                     raise ValueError("Invalid isodiff filename.")
             else:
@@ -703,6 +701,6 @@ class FermipyDatasetsReader(DatasetReader):
                 )
         else:
             if isinstance(data, str):
-                return data
+                return Path(data)
             else:
                 raise ValueError("Invalid isodiff filename.")
