@@ -1904,15 +1904,11 @@ class Map(abc.ABC):
             other = u.Quantity(other, copy=COPY_IF_NEEDED)
 
         unit = None
+        other_data = other.data if isinstance(other, Map) else other.value
         if operator in [np.multiply, np.true_divide]:
             unit = operator(self.unit, other.unit)
-            other_data = other.data if isinstance(other, Map) else other.value
         else:
-            other_data = (
-                other.to_unit(self.unit).data
-                if isinstance(other, Map)
-                else other.to_value(self.unit)
-            )
+            other_data = other.unit.get_converter(self.unit)(other_data)
 
         out = self.copy() if copy else self
         out.data = operator(out.data, other_data)
