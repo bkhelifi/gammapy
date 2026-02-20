@@ -1908,7 +1908,9 @@ class Map(abc.ABC):
         if operator in [np.multiply, np.true_divide]:
             unit = operator(self.unit, other.unit)
         else:
-            other_data = other.unit.get_converter(self.unit)(other_data)
+            other_data = other.unit.get_converter(self.unit)(other_data).astype(
+                other_data.dtype
+            )
 
         out = self.copy() if copy else self
         out.data = operator(out.data, other_data)
