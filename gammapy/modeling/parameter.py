@@ -979,6 +979,7 @@ class PriorParameter(Parameter):
         self.min = min
         self.max = max
         self._error = error
+        self._prior = None
         if isinstance(value, u.Quantity) or isinstance(value, str):
             val = u.Quantity(value)
             self.value = val.value
