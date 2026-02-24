@@ -3223,7 +3223,7 @@ class MapDatasetOnOff(MapDataset):
             name=name,
         )
 
-        kwargs = {"name": name, "acceptance_off": None}
+        kwargs = {"name": name, "counts_off": None, "acceptance_off": None}
 
         if self.counts_off is not None:
             kwargs["counts_off"] = self.counts_off.get_spectrum(
