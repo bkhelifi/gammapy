@@ -3223,7 +3223,7 @@ class MapDatasetOnOff(MapDataset):
             name=name,
         )
 
-        kwargs = {"name": name, "counts_off": None, "acceptance_off": None}
+        kwargs = {"name": name, "acceptance_off": None}
 
         if self.counts_off is not None:
             kwargs["counts_off"] = self.counts_off.get_spectrum(
@@ -3234,7 +3234,7 @@ class MapDatasetOnOff(MapDataset):
             kwargs["acceptance"] = self.acceptance.get_spectrum(
                 on_region, np.mean, weights=self.mask_safe
             )
-            if kwargs["counts_off"] is not None:
+            if self.counts_off is not None:
                 norm = self.background.get_spectrum(
                     on_region, np.sum, weights=self.mask_safe
                 )
