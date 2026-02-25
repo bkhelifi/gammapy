@@ -2997,9 +2997,9 @@ class MapDatasetOnOff(MapDataset):
         random_state = get_random_state(random_state)
         npred = self.npred_signal()
         data = np.nan_to_num(npred.data, copy=True, nan=0.0, posinf=0.0, neginf=0.0)
-        npred.data = random_state.poisson(data)
+        npred.data = random_state.poisson(data).astype("float")
 
-        npred_bkg = random_state.poisson(npred_background.data)
+        npred_bkg = random_state.poisson(npred_background.data).astype("float")
 
         self.counts = npred + npred_bkg
 
