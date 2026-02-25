@@ -677,30 +677,22 @@ class FermipyDatasetsReader(DatasetReader):
 
     @staticmethod
     def _get_components(data):
-        if (
-            "components" in data
-            and isinstance(data["components"], list)
-            and len(data["components"]) > 0
-        ):
-            components = data["components"]
-        else:
-            components = [data]
+    components = data.get("components")
+    if isinstance(components, list) and len(components)>0:
         return components
+    return [data]
 
     @staticmethod
     def _get_isodiff(data):
-        if isinstance(data, list):
-            if len(data) == 1:
-                if isinstance(data[0], str):
-                    return Path(data[0])
-                else:
-                    raise ValueError("Invalid isodiff filename.")
-            else:
-                raise ValueError(
-                    "Only one isodiff filename per component should be given."
-                )
-        else:
-            if isinstance(data, str):
-                return Path(data)
-            else:
-                raise ValueError("Invalid isodiff filename.")
+        if isinstance(data, str):
+            return Path(data)
+    
+         if not isinstance(data, list):
+            raise ValueError("Invalid isodiff filename.")        
+         
+         if len(data) != 1:
+             raise ValueError("Only one isodiff filename per component should be given.")
+         if not isinstance(data[0], str):
+             raise ValueError("Invalid isodiff filename.")
+         return Path(data[0])
+             
