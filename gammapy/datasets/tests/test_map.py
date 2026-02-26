@@ -1470,6 +1470,7 @@ def test_mapdataset_on_off_to_spectrum_dataset_with_no_counts_off(images):
         center=dataset.counts.geom.center_skydir, radius=0.1 * u.deg
     )
     spectrum_dataset = dataset.to_spectrum_dataset(on_region)
+    assert spectrum_dataset.acceptance is not None
     assert spectrum_dataset.counts_off is None
     assert spectrum_dataset.acceptance_off is None
 
