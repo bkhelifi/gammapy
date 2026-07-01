@@ -547,11 +547,8 @@ class GADFResponseHeader(GADFHDUHeader, HDUResponseFields):
 GADF_HEADER_MODELS = {
     "EVENTS": GADFEventsHeader,
     "GTI": GADFGTIHeader,
-    "AEFF": GADFResponseHeader,
-    "EDISP": GADFResponseHeader,
-    "BKG": GADFResponseHeader,
-    "PSF": GADFResponseHeader,
     "POINTING": GADFPointingHeader,
+    "RESPONSE": GADFResponseHeader,
 }
 
 
@@ -591,6 +588,10 @@ def _schema_key(header):
 
 DEFAULT_DATA_FORMAT = "GADF"
 DEFAULT_DATA_FORMAT_VERSION = GADF_DEFAULT_VERSION
+
+
+def _header_key(meta):
+    return meta.get("HDUCLAS1")
 
 
 def _check_data_format(meta, format, strict):
@@ -679,24 +680,24 @@ class HDUReaderWriter:
             )
         filename = make_path(filename)
         table = Table.read(filename, hdu=hdu)
-
-        meta_format = _check_data_format(table.meta, format, strict)
+        meta = table.meta
+        meta_format = _check_data_format(meta, format, strict)
         print(f"{hdu} table format: {meta_format}")
 
         if meta_format in DATA_FORMATS_MODELS.keys():
             try:
-                header = DATA_FORMATS_MODELS[meta_format]["HEADER"][hdu].from_header(
-                    table.meta
-                )
+                header = DATA_FORMATS_MODELS[meta_format]["HEADER"][
+                    _header_key(meta)
+                ].from_header(meta)
                 cls.format_validator(header, table, meta_format, version, strict)
             except (ValueError, KeyError, TypeError, UnitTypeError) as e:
                 if strict:
                     raise
                 log.warning("Header validation failed (%s), using CustomHDUHeader.", e)
-                header = CustomHDUHeader.from_header(table.meta)
+                header = CustomHDUHeader.from_header(meta)
                 version = None
         else:
-            header = CustomHDUHeader.from_header(table.meta)
+            header = CustomHDUHeader.from_header(meta)
             version = None
 
         return cls(
@@ -808,10 +809,7 @@ class GADFResponseReaderWriter(HDUReaderWriter):
 GADF_READER_WRITER_MODELS = {
     "EVENTS": GADFEventsReaderWriter,
     "GTI": GADFGTIReaderWriter,
-    "AEFF": GADFResponseReaderWriter,
-    "EDISP": GADFResponseReaderWriter,
-    "PSF": GADFResponseReaderWriter,
-    "BKG": GADFResponseReaderWriter,
+    "RESPONSE": GADFResponseReaderWriter,
 }
 
 
@@ -841,17 +839,21 @@ class HDUListReaderWriter:
                 else:
                     try:
                         table = Table.read(filename, hdu=hdu.name)
-                        meta_format = _check_data_format(table.meta, format, strict)
-                        print(f"{hdu.name} table format: {meta_format}")
+                        meta = table.meta
+                        meta_format = _check_data_format(meta, format, strict)
+                        if meta_format:
+                            print(f"{hdu.name}: {meta_format}, table")
+                        else:
+                            print(f"{hdu.name}: unknown format, table")
                         formatlist.append(meta_format)
                         if meta_format in DATA_FORMATS_MODELS.keys():
                             try:
                                 header = DATA_FORMATS_MODELS[meta_format]["HEADER"][
-                                    hdu.name
-                                ].from_header(table.meta)
+                                    _header_key(meta)
+                                ].from_header(meta)
                                 ReaderWriter = DATA_FORMATS_MODELS[meta_format][
                                     "READER_WRITER"
-                                ][hdu.name]
+                                ][_header_key(meta)]
                                 ReaderWriter.format_validator(
                                     header, table, format, version, strict
                                 )
@@ -867,11 +869,11 @@ class HDUListReaderWriter:
                                     "Header validation failed (%s), using CustomHDUHeader.",
                                     e,
                                 )
-                                header = CustomHDUHeader.from_header(table.meta)
+                                header = CustomHDUHeader.from_header(meta)
                                 version = None
                                 ReaderWriter = HDUReaderWriter
                         else:
-                            header = CustomHDUHeader.from_header(table.meta)
+                            header = CustomHDUHeader.from_header(meta)
                             version = None
                             ReaderWriter = HDUReaderWriter
 
@@ -880,7 +882,12 @@ class HDUListReaderWriter:
                         )
 
                     except (ValueError, KeyError, TypeError):
-                        hdus[hdu.name] = hdu
+                        try:
+                            hdus[hdu.name] = hdu.data
+                            print(f"{hdu.name}: unknown format, data")
+                        except (ValueError, TypeError):
+                            hdus[hdu.name] = hdu
+                            print(f"{hdu.name}: unknown format, unknown type")
         return cls(hdulist=hdus, formatlist=formatlist)
 
     def to_hdulist(
