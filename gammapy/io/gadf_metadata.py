@@ -1,14 +1,16 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from astropy.io import fits
 from astropy.table import Table
 from astropy.units import UnitTypeError
-from pydantic import BaseModel, model_validator, ConfigDict, Field
+from pydantic import BaseModel, model_validator, ConfigDict, Field, ValidationInfo
 from typing import ClassVar
 
 # from gammapy.datasets.io import OGIPDatasetReader, OGIPDatasetWriter
-
+from gammapy.data.io import EventListReader
+from gammapy.data import GTI
+from gammapy.datasets import MapDataset, SpectrumDataset
 from gammapy.irf import (
     EffectiveAreaTable2D,
     EnergyDispersion2D,
@@ -21,7 +23,7 @@ from gammapy.irf import (
     PSFKing,
     RadMax2D,
 )
-from gammapy.irf.io import load_irf_dict_from_file
+from gammapy.irf.io import _get_hdu_type_and_class
 from gammapy.utils.scripts import make_path
 from gammapy.utils.table_validator import TableValidator
 
@@ -246,6 +248,22 @@ GADF_IRF_MAP_HDU_SPECIFICATION = {
     "psf_map_reco": "psf",
 }
 
+PRODUCT_MODELS = {
+    "EVENTS": EventListReader,
+    "GTI": GTI,
+    "POINTING": None,
+    "AEFF_2D": EffectiveAreaTable2D,
+    "EDISP_2D": EnergyDispersion2D,
+    "PSF_TABLE": PSF3D,
+    "PSF_3D": PSF3D,
+    "PSF_3GAUSS": EnergyDependentMultiGaussPSF,
+    "PSF_KING": PSFKing,
+    "BKG_2D": Background2D,
+    "BKG_3D": Background3D,
+    "RAD_MAX_2D": RadMax2D,
+    "MapDataset": MapDataset,
+    "SpectrumDataset": SpectrumDataset,
+}
 
 # Nested registry: version -> HDU -> column-definition YAML.
 # Need to check the differences between versions
@@ -259,6 +277,7 @@ GADF_PRODUCTS_TABLE_DEFINITION = {
         "EDISP_2D": GADF_EDISP_2D_TABLE_DEFINITION,
         "PSF_TABLE": GADF_PSF_2D_TABLE_DEFINITION,
         "PSF_3D": GADF_PSF_3D_TABLE_DEFINITION,
+        "PSF_3GAUSS": GADF_PSF_3D_TABLE_DEFINITION,
         "PSF_KING": GADF_PSF_KING_TABLE_DEFINITION,
         "BKG_2D": GADF_BKG_2D_TABLE_DEFINITION,
         "BKG_3D": GADF_BKG_3D_TABLE_DEFINITION,
@@ -271,6 +290,7 @@ GADF_PRODUCTS_TABLE_DEFINITION = {
         "AEFF_2D": GADF_AEFF_2D_TABLE_DEFINITION,
         "EDISP_2D": GADF_EDISP_2D_TABLE_DEFINITION,
         "PSF_TABLE": GADF_PSF_2D_TABLE_DEFINITION,
+        "PSF_3GAUSS": GADF_PSF_3D_TABLE_DEFINITION,
         "PSF_3D": GADF_PSF_3D_TABLE_DEFINITION,
         "PSF_KING": GADF_PSF_KING_TABLE_DEFINITION,
         "BKG_2D": GADF_BKG_2D_TABLE_DEFINITION,
@@ -292,7 +312,7 @@ DEFAULT_STRICT_READ = False
 DEFAULT_STRICT_WRITE = True
 
 
-# --------------- GADF MANDATORY BASE FIELDS ---------------
+# --------------- FORMAT AGNOSTIC BASE FIELDS ---------------
 # Also used in other formats (like OGIP), separated here in anticipation
 # The fields are written as optional but they are required at validation
 
@@ -300,21 +320,21 @@ DEFAULT_STRICT_WRITE = True
 class HDUFields(BaseModel):
     HDUCLASS: Optional[str] = "GADF"
     HDUVERS: Optional[str] = GADF_DEFAULT_VERSION
-    HDUDOC: Optional[str]
-    HDUCLAS1: Optional[str]
+    HDUDOC: Optional[str] = None
+    HDUCLAS1: Optional[str] = None
 
 
 class HDUResponseFields(BaseModel):
-    HDUCLAS2: Optional[str]
-    HDUCLAS3: Optional[str]
-    HDUCLAS4: Optional[str]
+    HDUCLAS2: Optional[str] = None
+    HDUCLAS3: Optional[str] = None
+    HDUCLAS4: Optional[str] = None
 
 
 class GeneralFields(BaseModel):
-    TELESCOP: Optional[str]
-    INSTRUME: Optional[str]
-    ORIGIN: Optional[str]
-    CREATOR: Optional[str]
+    TELESCOP: Optional[str] = None
+    INSTRUME: Optional[str] = None
+    ORIGIN: Optional[str] = None
+    CREATOR: Optional[str] = None
 
 
 # --------------- GADF MANDATORY BASE FIELDS ---------------
@@ -322,38 +342,38 @@ class GeneralFields(BaseModel):
 
 
 class GADFTimeFields(BaseModel):
-    MJDREFI: Optional[int]
-    MJDREFF: Optional[float]
-    TIMEUNIT: Optional[str]
-    TIMESYS: Optional[str]
-    TIMEREF: Optional[str]
-    TSTART: Optional[float]
-    TSTOP: Optional[float]
+    MJDREFI: Optional[int] = None
+    MJDREFF: Optional[float] = None
+    TIMEUNIT: Optional[str] = None
+    TIMESYS: Optional[str] = None
+    TIMEREF: Optional[str] = None
+    TSTART: Optional[float] = None
+    TSTOP: Optional[float] = None
 
 
 class GADFEarthLocationFields(BaseModel):
-    GEOLON: Optional[float]
-    GEOLAT: Optional[float]
-    ALTITUDE: Optional[float]
+    GEOLON: Optional[float] = None
+    GEOLAT: Optional[float] = None
+    ALTITUDE: Optional[float] = None
 
 
 class GADFPointingFields(BaseModel):
-    RA_PNT: Optional[float]
-    DEC_PNT: Optional[float]
-    ALT_PNT: Optional[float]
-    AZ_PNT: Optional[float]
+    RA_PNT: Optional[float] = None
+    DEC_PNT: Optional[float] = None
+    ALT_PNT: Optional[float] = None
+    AZ_PNT: Optional[float] = None
 
 
 class GADFObsFields(BaseModel):
-    OBS_ID: Optional[int]
-    OBS_MODE: Optional[str]
-    TASSIGN: Optional[str]
-    ONTIME: Optional[float]
-    LIVETIME: Optional[float]
-    DATE_OBS: Optional[str] = Field(alias="DATE-OBS")
-    TIME_OBS: Optional[str] = Field(alias="TIME-OBS")
-    DATE_END: Optional[str] = Field(alias="DATE-END")
-    TIME_END: Optional[str] = Field(alias="TIME-END")
+    OBS_ID: Optional[Union[int, str]] = None
+    OBS_MODE: Optional[str] = None
+    TASSIGN: Optional[str] = None
+    ONTIME: Optional[float] = None
+    LIVETIME: Optional[float] = None
+    DATE_OBS: Optional[str] = Field(None, alias="DATE-OBS")
+    TIME_OBS: Optional[str] = Field(None, alias="TIME-OBS")
+    DATE_END: Optional[str] = Field(None, alias="DATE-END")
+    TIME_END: Optional[str] = Field(None, alias="TIME-END")
 
 
 # --------------- GENERAL BASE HEADERS ---------------
@@ -362,10 +382,11 @@ def _field_names(*models):
 
 
 class HDUHeader(BaseModel):
-    """Base HDU header model"""
+    """Base HDU header model."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
     HDUCLASS: Optional[str] = "CUSTOM"
+    REQUIRED: ClassVar[frozenset] = frozenset()
 
     def __getitem__(self, name):
         try:
@@ -374,38 +395,42 @@ class HDUHeader(BaseModel):
             raise KeyError(name)
 
     def to_header(self):
-        """Return a FITS-header-compatible dict (native types, None dropped)."""
         return {
-            key: value
-            for key, value in self.model_dump(by_alias=True).items()
-            if value is not None
+            k: v for k, v in self.model_dump(by_alias=True).items() if v is not None
         }
 
     @classmethod
-    def from_header(cls, header):
-        """Build the model from a FITS header / table.meta mapping.
+    def from_header(cls, header, strict=False):
+        kwargs = {
+            k: header[cls.model_fields[k].alias or k]
+            for k in cls.model_fields
+            if (cls.model_fields[k].alias or k) in header
+        }
+        return cls.model_validate(kwargs, context={"strict": strict})
 
-        Only keys present in the header are passed, so model defaults apply and
-        optional keys fall back to None.
-        """
-        kwargs = {}
-        for name, field in cls.model_fields.items():
-            fits_key = (
-                field.alias or name
-            )  # FITS keyword = alias if set, else field name
-            if fits_key in header:
-                kwargs[fits_key] = header[fits_key]
-        return cls(**kwargs)
-
-    def validate_required(self):
-        missing = [
-            self.model_fields[name].alias or name  # report the FITS keyword
+    def _check_required(self):
+        """Return list of missing mandatory FITS keywords (empty if none)."""
+        return [
+            self.model_fields[name].alias or name
             for name in self.REQUIRED
             if getattr(self, name) is None
         ]
+
+    @model_validator(mode="after")
+    def _enforce(self, info: ValidationInfo):
+        strict = (info.context or {}).get("strict", False)
+        missing = self._check_required()
         if missing:
-            raise ValueError(f"Missing mandatory keyword(s): {missing}")
+            msg = f"Missing mandatory keyword(s): {missing}"
+            if strict:
+                raise ValueError(msg)
+            log.warning(msg)
         return self
+
+
+class HDUProductHeader(HDUHeader, GeneralFields):
+    HDUCLAS1: Literal["PRODUCT"] = "PRODUCT"
+    REQUIRED: ClassVar[frozenset] = _field_names(HDUFields, GeneralFields)
 
 
 # --------------- GADF BASE HEADER ---------------
@@ -413,13 +438,13 @@ class GADFHDUHeader(HDUFields, HDUHeader):
     HDUCLASS: Literal["GADF"] = "GADF"
 
     @model_validator(mode="after")
-    def _set_hdudoc(self):
-        if self.HDUVERS not in GADF_HDUDOC:
-            raise ValueError(
-                f"Unknown HDUVERS {self.HDUVERS!r}; known: {list(GADF_HDUDOC)}"
-            )
-        if self.HDUDOC is None:
-            self.HDUDOC = GADF_HDUDOC[self.HDUVERS]
+    def _enforce_gadf(self, info: ValidationInfo):
+        strict = (info.context or {}).get("strict", False)
+        if self.HDUVERS is not None and self.HDUVERS not in GADF_HDUDOC:
+            msg = f"Non-standard HDUVERS {self.HDUVERS!r}; known: {list(GADF_HDUDOC)}"
+            if strict:
+                raise ValueError(msg)
+            log.warning(msg)
         return self
 
 
@@ -433,9 +458,9 @@ class GADFEventsHeader(
     GADFPointingFields,
 ):
     HDUCLAS1: Literal["EVENTS"] = "EVENTS"
-    DEADC: Optional[float]
-    EQUINOX: Optional[float]
-    RADECSYS: Optional[str]
+    DEADC: Optional[float] = None
+    EQUINOX: Optional[Union[float, str]] = None
+    RADECSYS: Optional[str] = None
 
     REQUIRED: ClassVar[frozenset] = _field_names(
         HDUFields,
@@ -451,14 +476,14 @@ class GADFEventsHeader(
     RA_OBJ: Optional[float] = None
     DEC_OBJ: Optional[float] = None
     OBSERVER: Optional[str] = None
-    EV_CLASS: Optional[str] = None
+    EV_CLASS: Optional[Union[int, str]] = None
     TELAPSE: Optional[float] = None
-    TELLIST: Optional[str] = None
+    TELLIST: Optional[Union[str, list]] = None
     N_TELS: Optional[int] = None
     TASSIGN: Optional[str] = None
-    DST_VER: Optional[str] = None
-    ANA_VER: Optional[str] = None
-    CAL_VER: Optional[str] = None
+    DST_VER: Optional[Union[int, str]] = None
+    ANA_VER: Optional[Union[int, str]] = None
+    CAL_VER: Optional[Union[int, str]] = None
     CONV_DEP: Optional[float] = None
     CONV_RA: Optional[float] = None
     CONV_DEC: Optional[float] = None
@@ -470,6 +495,16 @@ class GADFEventsHeader(
     PRESSURE: Optional[float] = None
     RELHUM: Optional[float] = None
     NSBLEVEL: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _enforce_events(self, info: ValidationInfo):
+        if not (info.context or {}).get("strict"):
+            return self
+        if isinstance(self.TELLIST, list):
+            raise ValueError(
+                f"TELLIST must be a comma-separated string, got {self.TELLIST!r}"
+            )
+        return self
 
 
 # --------------- GADF GTI HEADER ---------------
@@ -494,7 +529,7 @@ GADF_IRF_TAG_REQUIRED_FIELDS = {
 
 class GADFResponseHeader(GADFHDUHeader, HDUResponseFields):
     HDUCLAS1: Literal["RESPONSE"] = "RESPONSE"
-    EXTNAME: Optional[str]
+    EXTNAME: Optional[str] = None
     REQUIRED: ClassVar[frozenset] = _field_names(HDUFields, HDUResponseFields) | {
         "EXTNAME"
     }
@@ -580,10 +615,6 @@ class CustomHDUHeader(HDUHeader, HDUResponseFields, GeneralFields):
         return cls.model_construct(**dict(header))
 
 
-def _schema_key(header):
-    return getattr(header, "HDUCLAS4", None) or header.HDUCLAS1
-
-
 # --------------- BASE READER/WRITER ---------------
 
 DEFAULT_DATA_FORMAT = "GADF"
@@ -594,15 +625,27 @@ def _header_key(meta):
     return meta.get("HDUCLAS1")
 
 
+def _hdu_class_key(meta):
+    hdu_class = meta.get("HDUCLAS4") or meta.get("HDUCLAS1")
+    if hdu_class not in PRODUCT_MODELS.keys():
+        hdu_class = meta.get("HDUCLAS2", "unknown")
+        if (hdu_class in ["EFF_AREA", "RPSF", "EDISP", "BKG"]) and meta.get("HDUCLAS4"):
+            _, hdu_class = _get_hdu_type_and_class(meta)  # CTA-1DC workaround
+    return hdu_class.upper()
+
+
 def _check_data_format(meta, format, strict):
     meta_format = meta.get("HDUCLASS")
     if meta_format != format:
-        msg = f"HDUReaderWriter objects expected a {format} HDU class, {meta_format} was provided."
         if strict:
-            raise ValueError(msg)
-        else:
-            log.warning(msg)
+            raise ValueError(
+                f"HDUReaderWriter objects expected a {format} HDU class, {meta_format} was provided."
+            )
     return meta_format
+
+
+class UnknownHDUClass(IOError):
+    """Raised when a file contains an unknown HDUCLASS."""
 
 
 class HDUReaderWriter:
@@ -614,6 +657,7 @@ class HDUReaderWriter:
         self,
         table,
         header,
+        data=None,
         hdu=None,
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
@@ -625,6 +669,7 @@ class HDUReaderWriter:
             )
         self.table = table
         self.header = header
+        self.data = data
         self.hdu = hdu
         self.format = format
         self.version = version
@@ -637,18 +682,14 @@ class HDUReaderWriter:
             definition = DATA_FORMATS_MODELS[format]["TABLE"][version][hdu]
             return TableValidator.from_yaml(definition)
         else:
-            print(f"No table definition for {format}")
+            log.warning(f"No table definition for {format}")
 
     @classmethod
     def format_validator(cls, header, table, format, version, strict):
         errors = []
         try:
-            header.validate_required()
-        except ValueError as e:
-            errors.append(f"header: {e}")
-        try:
             cls.table_validator(
-                hdu=_schema_key(header), format=format, version=version
+                hdu=_hdu_class_key(table.meta), format=format, version=version
             ).run(table)
         except (KeyError, TypeError, UnitTypeError) as e:  # the types run() raises
             errors.append(f"table: {e}")
@@ -672,6 +713,7 @@ class HDUReaderWriter:
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_READ,
+        verbose=True,
     ):
         hdu = hdu or cls.DEFAULT_HDU
         if hdu is None:
@@ -679,30 +721,64 @@ class HDUReaderWriter:
                 "HDUReaderWriter objects require an `hdu` (no default for this class)."
             )
         filename = make_path(filename)
-        table = Table.read(filename, hdu=hdu)
-        meta = table.meta
-        meta_format = _check_data_format(meta, format, strict)
-        print(f"{hdu} table format: {meta_format}")
+        with fits.open(filename, memmap=False) as hdulist:
+            fits_hdu = hdulist[hdu]
+            meta = dict(fits_hdu.header)
+            meta_format = _check_data_format(meta, format, strict)
 
-        if meta_format in DATA_FORMATS_MODELS.keys():
-            try:
-                header = DATA_FORMATS_MODELS[meta_format]["HEADER"][
-                    _header_key(meta)
-                ].from_header(meta)
-                cls.format_validator(header, table, meta_format, version, strict)
-            except (ValueError, KeyError, TypeError, UnitTypeError) as e:
-                if strict:
-                    raise
-                log.warning("Header validation failed (%s), using CustomHDUHeader.", e)
+            if fits_hdu.is_image:
+                header = CustomHDUHeader.from_header(meta)
+                print(f"{hdu}: {meta_format}, data")
+                return cls(
+                    table=None,
+                    header=header,
+                    data=fits_hdu.data,
+                    hdu=hdu,
+                    format=meta_format,
+                    version=None,
+                )
+            table = Table.read(fits_hdu)
+            data = None
+            meta = table.meta
+            hdu_class = _hdu_class_key(meta)
+            meta_format = _check_data_format(meta, format, strict)
+            print(f"{hdu}: {meta_format}, table")
+
+            if meta_format in DATA_FORMATS_MODELS.keys():
+                try:
+                    header = DATA_FORMATS_MODELS[meta_format]["HEADER"][
+                        _header_key(meta)
+                    ].from_header(meta, strict)
+                    cls.format_validator(header, table, meta_format, version, strict)
+                except (ValueError, KeyError, TypeError, UnitTypeError) as e:
+                    if strict:
+                        raise
+                    if verbose:
+                        log.warning(
+                            "Header validation failed (%s), using CustomHDUHeader.", e
+                        )
+
+                    header = CustomHDUHeader.from_header(meta)
+                    version = None
+            else:
                 header = CustomHDUHeader.from_header(meta)
                 version = None
-        else:
-            header = CustomHDUHeader.from_header(meta)
-            version = None
 
-        return cls(
-            table=table, header=header, hdu=hdu, format=meta_format, version=version
-        )
+            return cls(
+                table=table,
+                header=header,
+                data=data,
+                hdu=hdu_class,
+                format=meta_format,
+                version=version,
+            )
+
+    def to_product(self):
+        if self.hdu in PRODUCT_MODELS.keys():
+            try:
+                return PRODUCT_MODELS[self.hdu].from_table(self.table)
+            except (ValueError, AttributeError) as e:
+                log.warning(e)
 
     def to_table_hdu(
         self,
@@ -751,10 +827,13 @@ class GADFEventsReaderWriter(HDUReaderWriter):
     def from_eventlist(
         cls, eventlist, version=GADF_DEFAULT_VERSION, strict=DEFAULT_STRICT_READ
     ):
+        data = None
         table = eventlist.table
-        header = GADF_HEADER_MODELS[cls.DEFAULT_HDU].from_header(table.meta)
+        header = GADF_HEADER_MODELS[cls.DEFAULT_HDU].from_header(table.meta, strict)
         cls.format_validator(header, table, cls.format, version, strict)
-        return cls(table=table, header=header, hdu=cls.DEFAULT_HDU, version=version)
+        return cls(
+            table=table, header=header, data=data, hdu=cls.DEFAULT_HDU, version=version
+        )
 
 
 # --------------- GTI READER/WRITER ---------------
@@ -796,10 +875,11 @@ class GADFResponseReaderWriter(HDUReaderWriter):
             cls.table_validator(tag.upper(), version).run(table)
         spec = GADF_IRF_DL3_HDU_SPECIFICATION[tag]
         meta = {**dict(getattr(irf, "meta", {}) or {}), **spec["mandatory_keywords"]}
-        header = cls.GADF_HEADER_MODEL.from_header(meta)
+        header = cls.GADF_HEADER_MODEL.from_header(meta, strict)
         return cls(
             table=table,
             header=header,
+            data=None,
             hdu=spec["extname"],
             format="GADF",
             version=version,
@@ -817,9 +897,79 @@ DATA_FORMATS_MODELS["GADF"]["READER_WRITER"] = GADF_READER_WRITER_MODELS
 
 
 class HDUListReaderWriter:
-    def __init__(self, hdulist, formatlist):
-        self.hdulist = hdulist
-        self.formatlist = formatlist
+    def __init__(self, hdu_dict, format_list):
+        self.hdu_dict = hdu_dict
+        self.format_list = format_list
+
+    @staticmethod
+    def _hdu_kind(hdu):
+        if isinstance(hdu, fits.PrimaryHDU):
+            return "primary"
+        return "image" if hdu.is_image else "table"
+
+    @classmethod
+    def _read_hdu(cls, hdu, format, version, strict, verbose=True):
+        kind = cls._hdu_kind(hdu)
+
+        if kind == "primary":  # no HDUCLASS in primary
+            header = HDUHeader.from_header(dict(hdu.header), strict)
+            return HDUReaderWriter(
+                data=None,
+                table=None,
+                header=header,
+                hdu=hdu.name,
+                format=format,
+                version=version,
+            )
+
+        if kind == "image":  # no table validation
+            meta, data, table = dict(hdu.header), hdu.data, None
+            hkey, validate = "IMAGE", False
+        else:  # table
+            table = Table.read(hdu)
+            meta, data = dict(table.meta), None
+            hkey, validate = _header_key(meta), True
+
+        hdu_class = _hdu_class_key(meta)
+        meta_format = _check_data_format(meta, format, strict)
+        models = DATA_FORMATS_MODELS.get(meta_format)
+
+        if models is None:  # unknown format -> custom, no version
+            header = CustomHDUHeader.from_header(meta)
+            return HDUReaderWriter(
+                data=data,
+                table=table,
+                header=header,
+                hdu=hdu_class,
+                format=meta_format,
+                version=None,
+            )
+
+        header = models["HEADER"][hkey].from_header(meta, strict)
+        ReaderWriter = models.get("READER_WRITER", {}).get(hkey, HDUReaderWriter)
+        if validate:
+            try:
+                ReaderWriter.format_validator(
+                    header, table, meta_format, version, strict
+                )
+            except (ValueError, KeyError, TypeError, UnitTypeError) as e:
+                if strict:
+                    raise
+                if verbose:
+                    log.warning(
+                        "Header validation failed (%s); %s v%s not enforced.",
+                        e,
+                        meta_format,
+                        version,
+                    )
+        return ReaderWriter(
+            data=data,
+            table=table,
+            header=header,
+            hdu=hdu_class,
+            format=meta_format,
+            version=version,
+        )
 
     @classmethod
     def read(
@@ -828,67 +978,35 @@ class HDUListReaderWriter:
         format=DEFAULT_DATA_FORMAT,
         version=GADF_DEFAULT_VERSION,
         strict=DEFAULT_STRICT_READ,
+        verbose=True,
     ):
-        hdus = {}
-        formatlist = []
         filename = make_path(filename)
+        if verbose:
+            log.warning(
+                "Reading %s \nExpected data format: %s, strict=%s",
+                filename,
+                format,
+                strict,
+            )
+
+        hdu_dict, format_list = {}, []
         with fits.open(filename, memmap=False) as hdulist:
             for hdu in hdulist:
-                if hdu.name == "PRIMARY":
-                    hdus[hdu.name] = hdu
-                else:
-                    try:
-                        table = Table.read(filename, hdu=hdu.name)
-                        meta = table.meta
-                        meta_format = _check_data_format(meta, format, strict)
-                        if meta_format:
-                            print(f"{hdu.name}: {meta_format}, table")
-                        else:
-                            print(f"{hdu.name}: unknown format, table")
-                        formatlist.append(meta_format)
-                        if meta_format in DATA_FORMATS_MODELS.keys():
-                            try:
-                                header = DATA_FORMATS_MODELS[meta_format]["HEADER"][
-                                    _header_key(meta)
-                                ].from_header(meta)
-                                ReaderWriter = DATA_FORMATS_MODELS[meta_format][
-                                    "READER_WRITER"
-                                ][_header_key(meta)]
-                                ReaderWriter.format_validator(
-                                    header, table, format, version, strict
-                                )
-                            except (
-                                ValueError,
-                                KeyError,
-                                TypeError,
-                                UnitTypeError,
-                            ) as e:
-                                if strict:
-                                    raise
-                                log.warning(
-                                    "Header validation failed (%s), using CustomHDUHeader.",
-                                    e,
-                                )
-                                header = CustomHDUHeader.from_header(meta)
-                                version = None
-                                ReaderWriter = HDUReaderWriter
-                        else:
-                            header = CustomHDUHeader.from_header(meta)
-                            version = None
-                            ReaderWriter = HDUReaderWriter
+                rw = cls._read_hdu(hdu, format, version, strict)
+                hdu_dict[hdu.name] = rw
+                format_list.append(rw.format)
+            if verbose:
+                log.warning("Detected formats: %s", format_list)
+        return cls(hdu_dict=hdu_dict, format_list=format_list)
 
-                        hdus[hdu.name] = ReaderWriter(
-                            table=table, header=header, hdu=hdu.name, version=version
-                        )
-
-                    except (ValueError, KeyError, TypeError):
-                        try:
-                            hdus[hdu.name] = hdu.data
-                            print(f"{hdu.name}: unknown format, data")
-                        except (ValueError, TypeError):
-                            hdus[hdu.name] = hdu
-                            print(f"{hdu.name}: unknown format, unknown type")
-        return cls(hdulist=hdus, formatlist=formatlist)
+    def to_product_dict(cls):
+        product_dict = {}
+        for hdu_name in list(cls.hdu_dict.keys())[1:]:
+            if hdu_name != "PRIMARY":
+                product_dict[cls.hdu_dict[hdu_name].hdu] = cls.hdu_dict[
+                    hdu_name
+                ].to_product()
+        return product_dict
 
     def to_hdulist(
         cls,
@@ -896,10 +1014,74 @@ class HDUListReaderWriter:
         version=GADF_DEFAULT_VERSION,
         strict=DEFAULT_STRICT_WRITE,
     ):
-        hdulist = [cls.hdulist["PRIMARY"]]
-        for hdu in list(cls.hdulist.keys())[1:]:
-            hdulist.append(cls.hdulist[hdu].to_table_hdu(version, strict))
+        hdulist = [cls.hdu_dict["PRIMARY"]]
+        for hdu in list(cls.hdu_dict.keys())[1:]:
+            hdulist.append(cls.hdu_dict[hdu].to_table_hdu(format, version, strict))
         return hdulist
 
     # Having a doubt here, should I be always declaring a new primary hdu like it is done elsewhere?
     # Because if I want to write a hdulist combining hdus from separate files, like one with the events and another one with the IRFs, I lose the original information although I am not creating or modifying anything
+
+
+class ProductReaderWriter:
+    """IO for multi-HDU gammapy products (DL4/DL5).
+
+    Data reconstruction is delegated to the gammapy object's own
+    from_hdulist / to_hdulist. This layer owns only the shared (primary)
+    metadata: validation on read, GADF-Plus keywords on write.
+    """
+
+    PRODUCT = None  # subclass sets, e.g. "MapDataset"
+
+    def __init__(
+        self,
+        product,
+        header=None,
+        format=DEFAULT_DATA_FORMAT,
+        version=DEFAULT_DATA_FORMAT_VERSION,
+    ):
+        self.product = product  # the gammapy object (MapDataset, ...)
+        self.header = header  # product-level metadata model (or CustomHDUHeader)
+        self.format = format
+        self.version = version
+
+    @classmethod
+    def read(
+        cls,
+        filename,
+        format=DEFAULT_DATA_FORMAT,
+        version=DEFAULT_DATA_FORMAT_VERSION,
+        strict=DEFAULT_STRICT_READ,
+    ):
+        filename = make_path(filename)
+        primary = fits.getheader(str(filename))  # primary-only, no data
+        meta_format = _check_data_format(primary, format, strict)
+        try:
+            header = HDUProductHeader.from_header(dict(primary), strict)
+        except (ValueError, KeyError, TypeError) as e:
+            if strict:
+                raise
+            log.warning("Product header validation failed (%s).", e)
+            # header = CustomHDUHeader.from_header(dict(primary))
+
+        product = PRODUCT_MODELS[cls.PRODUCT].read(filename)
+        return cls(product=product, header=header, format=meta_format, version=version)
+
+    def write(
+        self, filename, overwrite=False, checksum=False, strict=DEFAULT_STRICT_WRITE
+    ):
+        # delegate assembly to gammapy, then overlay validated shared metadata
+        hdulist = self.product.to_hdulist()
+        if self.header is not None:
+            hdulist[0].header.update(self.header.to_header())  # primary = shared meta
+        hdulist.writeto(
+            str(make_path(filename)), overwrite=overwrite, checksum=checksum
+        )
+
+
+class MapDatasetReaderWriter(ProductReaderWriter):
+    PRODUCT = "MapDataset"
+
+
+class SpectrumDatasetReaderWriter(ProductReaderWriter):
+    PRODUCT = "SpectrumDataset"
