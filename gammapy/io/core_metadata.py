@@ -238,13 +238,9 @@ def _check_data_format(meta, format, strict):
 
 def apply_meta_to_header(fits_header, header):
     meta = header.to_header()
-    comments = meta.pop("comments", None)
-    history = meta.pop("history", None)
+    meta.pop("comments", None)
+    meta.pop("history", None)
     fits_header.update(meta)
-    for line in ([comments] if isinstance(comments, str) else comments) or []:
-        fits_header.add_comment(line)
-    for line in ([history] if isinstance(history, str) else history) or []:
-        fits_header.add_history(line)
 
 
 # --------------- BASE READER/WRITER ---------------
@@ -346,7 +342,9 @@ class HDUReaderWriter:
         detected = _check_data_format(meta, format, strict)
         if detected in (None, "CUSTOM"):
             meta_format = format
-            log.warning(f"{hkey}: no detected format, using expected for validation.")
+            log.warning(
+                f"{hkey}: no detected format, using tested format for validation."
+            )
         else:
             meta_format = detected
         models = DATA_FORMATS_MODELS.get(meta_format)
@@ -396,27 +394,12 @@ class HDUReaderWriter:
         rw._table_valid = table_valid
         return rw
 
-        # try:
-        #     header = models["HEADER"][hkey].from_header(meta, version, strict)
-        #     if validate:
-        #         cls.format_validator(header, table, meta_format, version, strict)
-        # except (ValueError, KeyError, TypeError, UnitTypeError) as e:
-        #     if strict:
-        #         raise
-        #     if verbose:
-        #         log.warning("Header validation failed (%s), using CustomHDUHeader.", e)
-        #     header, version = CustomHDUHeader.from_header(meta), None
-
-        # return ReaderWriter(
-        #     table=table, data=data, header=header,
-        #     hdu=hdu_class, format=meta_format, version=version,
-        # )
-
     @classmethod
     def read(
         cls,
         filename,
         hdu=None,
+        checksum=False,
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_READ,
@@ -427,7 +410,7 @@ class HDUReaderWriter:
         hdu = hdu or cls.DEFAULT_HDU
         if hdu is None:
             raise ValueError("HDUReaderWriter objects require an `hdu`.")
-        with fits.open(make_path(filename), memmap=False) as hdulist:
+        with fits.open(make_path(filename), checksum=checksum, memmap=False) as hdulist:
             return cls._from_fits_hdu(hdulist[hdu], format, version, strict, verbose)
 
     def to_product(self):
@@ -442,10 +425,19 @@ class HDUReaderWriter:
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_WRITE,
+        verbose=True,
     ):
-        self.format_validator(self.header, self.table, format, version, strict)
+        header_valid, table_valid = self.format_validator(
+            self.header, self.table, format, version, strict
+        )
         table_hdu = fits.BinTableHDU(self.table, name=self.hdu)
         apply_meta_to_header(table_hdu.header, self.header)
+        if verbose:
+            hstr = "OK" if header_valid else "FAIL"
+            tstr = "OK" if table_valid else "FAIL"
+            print(
+                f"HDU: {self.hdu:<10}  TEST FMT: {format} VER: {version} HDR: {hstr} TAB: {tstr}"
+            )
         return table_hdu
 
     def to_image_hdu(self):
@@ -458,9 +450,10 @@ class HDUReaderWriter:
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_WRITE,
+        verbose=True,
     ):
         if self.table is not None:
-            return self.to_table_hdu(format, version, strict)
+            return self.to_table_hdu(format, version, strict, verbose)
         if self.data is not None:
             return self.to_image_hdu()
         raise ValueError(f"{self.hdu}: neither table nor data set, nothing to write.")
@@ -470,8 +463,9 @@ class HDUReaderWriter:
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_WRITE,
+        verbose=True,
     ):
-        return [fits.PrimaryHDU(), self._to_hdu(format, version, strict)]
+        return [fits.PrimaryHDU(), self._to_hdu(format, version, strict, verbose)]
 
     def write(
         self,
@@ -481,8 +475,9 @@ class HDUReaderWriter:
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_WRITE,
+        verbose=True,
     ):
-        hdulist = fits.HDUList(self.to_hdulist(format, version, strict))
+        hdulist = fits.HDUList(self.to_hdulist(format, version, strict, verbose))
         hdulist.writeto(
             str(make_path(filename)), overwrite=overwrite, checksum=checksum
         )
@@ -498,6 +493,7 @@ class HDUListReaderWriter:
     def read(
         cls,
         filename,
+        checksum=False,
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_READ,
@@ -508,14 +504,14 @@ class HDUListReaderWriter:
         filename = make_path(filename)
         if verbose:
             log.warning(
-                "Reading %s \nExpected data format: %s v%s, strict=%s",
+                "Reading %s \Tested data format: %s v%s, strict=%s",
                 filename,
                 format,
                 version,
                 strict,
             )
 
-        with fits.open(filename, memmap=False) as hdulist:
+        with fits.open(filename, checksum=checksum, memmap=False) as hdulist:
             hdu_dict = {}
             validation_info = []
             for hdu in hdulist:
@@ -566,12 +562,25 @@ class HDUListReaderWriter:
         return {key: rw.format for key, rw in self.hdu_dict.items()}
 
     def to_product_dict(self):
+        clas_to_type = {"rpsf": "psf", "eff_area": "aeff"}
+
         product_dict = {}
-        for hdu_name in self.hdu_dict:
-            if hdu_name != "PRIMARY":
-                product_dict[self.hdu_dict[hdu_name].hdu] = self.hdu_dict[
-                    hdu_name
-                ].to_product()
+        for hdu_name, rw in self.hdu_dict.items():
+            if hdu_name == "PRIMARY":
+                continue
+            # Conversion to keys accepted by Observation
+            hdu_type = clas_to_type.get(hdu_name.lower(), hdu_name.lower())
+            product_dict[hdu_type] = rw.to_product()
+
+        # pointing: only from EVENTS, only when no dedicated POINTING HDU exists
+        events_rw = self.hdu_dict.get("EVENTS")
+        if (
+            events_rw is not None
+            and "POINTING" not in self.hdu_dict
+            and hasattr(events_rw, "to_pointing")
+        ):
+            product_dict["pointing"] = events_rw.to_pointing()
+
         return product_dict
 
     def to_hdulist(
@@ -579,13 +588,29 @@ class HDUListReaderWriter:
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_WRITE,
+        verbose=True,
     ):
         hdulist = [fits.PrimaryHDU()]
         for hdu in self.hdu_dict:
             if hdu == "PRIMARY":
                 continue
-            hdulist.append(self.hdu_dict[hdu]._to_hdu(format, version, strict))
+            hdulist.append(self.hdu_dict[hdu]._to_hdu(format, version, strict, verbose))
         return hdulist
+
+    def write(
+        self,
+        filename,
+        overwrite=False,
+        checksum=False,
+        format=DEFAULT_DATA_FORMAT,
+        version=DEFAULT_DATA_FORMAT_VERSION,
+        strict=DEFAULT_STRICT_WRITE,
+        verbose=True,
+    ):
+        hdulist = fits.HDUList(self.to_hdulist(format, version, strict, verbose))
+        hdulist.writeto(
+            str(make_path(filename)), overwrite=overwrite, checksum=checksum
+        )
 
 
 class ProductReaderWriter:
@@ -597,6 +622,7 @@ class ProductReaderWriter:
         self,
         filename=None,
         hdu=None,
+        checksum=False,
         product=None,
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
@@ -606,7 +632,7 @@ class ProductReaderWriter:
 
         hdu = hdu or self.PRODUCT
         if product is None:
-            rw = HDUListReaderWriter.read(filename, format, version, strict)
+            rw = HDUListReaderWriter.read(filename, checksum, format, version, strict)
             product = rw.hdu_dict[hdu].to_product()
             print(product)
             if product is None:
@@ -628,12 +654,13 @@ class ProductReaderWriter:
         cls,
         filename,
         hdu=None,
+        checksum=False,
         format=DEFAULT_DATA_FORMAT,
         version=DEFAULT_DATA_FORMAT_VERSION,
         strict=DEFAULT_STRICT_READ,
     ):
         hdu = hdu or cls.PRODUCT
-        return cls(filename, hdu, None, format, version, strict).product
+        return cls(filename, hdu, checksum, None, format, version, strict).product
 
     def write(
         self,
