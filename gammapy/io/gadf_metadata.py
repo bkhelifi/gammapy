@@ -11,7 +11,7 @@ from typing import ClassVar, Literal, Optional, Union
 
 from pydantic import ValidationInfo, model_validator
 
-from gammapy.data import GTI
+from gammapy.data import GTI, FixedPointingInfo, ObservationMetaData
 from gammapy.data.io import EventListReader
 from gammapy.datasets import MapDataset, SpectrumDataset
 from gammapy.irf import (
@@ -24,6 +24,7 @@ from gammapy.irf import (
     PSFKing,
     RadMax2D,
 )
+from gammapy.maps import Map
 
 # Format-agnostic machinery (adjust the import path to where core_metadata lives).
 from gammapy.io.core_metadata import (
@@ -41,6 +42,7 @@ from gammapy.io.core_metadata import (
     PRODUCT_MODELS,
     _field_names,
     _header_key,
+    _hdu_class_key,
 )
 
 log = logging.getLogger(__name__)
@@ -541,6 +543,7 @@ class GADFEventsReaderWriter(HDUReaderWriter):
     """IO class specialised to the EVENTS HDU."""
 
     DEFAULT_HDU = "EVENTS"
+    GADF_HEADER_MODEL = GADFEventsHeader
     format = "GADF"
 
     @classmethod
@@ -548,17 +551,23 @@ class GADFEventsReaderWriter(HDUReaderWriter):
         cls, eventlist, version=GADF_DEFAULT_VERSION, strict=DEFAULT_STRICT_READ
     ):
         table = eventlist.table
-        header = GADF_HEADER_MODELS[cls.DEFAULT_HDU].from_header(table.meta, strict)
+        header = cls.GADF_HEADER_MODEL.from_header(table.meta, strict)
         cls.format_validator(header, table, cls.format, version, strict)
         return cls(
             table=table, header=header, data=None, hdu=cls.DEFAULT_HDU, version=version
         )
+
+    def to_pointing(self):
+        """Build FixedPointingInfo."""
+        return FixedPointingInfo.from_fits_header(self.header.to_header())
 
 
 class GADFGTIReaderWriter(HDUReaderWriter):
     """IO class specialised to the GTI HDU."""
 
     DEFAULT_HDU = "GTI"
+    GADF_HEADER_MODEL = GADFGTIHeader
+    format = "GADF"
 
 
 def resolve_irf_tag(meta):
@@ -583,6 +592,7 @@ class GADFResponseReaderWriter(HDUReaderWriter):
     """
 
     GADF_HEADER_MODEL = GADFResponseHeader
+    format = "GADF"
 
     @classmethod
     def from_irf(cls, irf, version=GADF_DEFAULT_VERSION, strict=DEFAULT_STRICT_READ):
@@ -597,8 +607,37 @@ class GADFResponseReaderWriter(HDUReaderWriter):
             table=table,
             header=header,
             data=None,
-            hdu=spec["extname"],
-            format="GADF",
+            hdu=_hdu_class_key(meta),
+            format=cls.format,
+            version=version,
+        )
+
+
+class GADFPointingReaderWriter(HDUReaderWriter):
+    """IO for GADF POINTING HDU.
+
+    Gammapy only supports the class FixedPointingInfo and assumes it by default. Fixed pointing information is extracted from the EVENTS HDU."""
+
+    DEFAULT_HDU = "POINTING"
+    GADF_HEADER_MODEL = GADFPointingHeader
+    format = "GADF"
+
+    @classmethod
+    def from_pointing(
+        cls, fpi, version=GADF_DEFAULT_VERSION, strict=DEFAULT_STRICT_READ
+    ):
+        header_dict = dict(
+            fpi.to_fits_header(format=cls.format.lower(), version=version)
+        )
+        header = cls.GADF_HEADER_MODEL.from_header(
+            header_dict, strict=strict, version=version
+        )
+        return cls(
+            table=None,
+            data=None,
+            header=header,
+            hdu=cls.DEFAULT_HDU,
+            format=cls.format.lower(),
             version=version,
         )
 
@@ -607,6 +646,7 @@ GADF_READER_WRITER_MODELS = {
     "EVENTS": GADFEventsReaderWriter,
     "GTI": GADFGTIReaderWriter,
     "RESPONSE": GADFResponseReaderWriter,
+    "POINTING": GADFPointingReaderWriter,
 }
 
 
@@ -624,7 +664,7 @@ PRODUCT_MODELS.update(
     {
         "EVENTS": EventListReader,
         "GTI": GTI,
-        "POINTING": None,
+        "POINTING": FixedPointingInfo,
         "AEFF_2D": EffectiveAreaTable2D,
         "EDISP_2D": EnergyDispersion2D,
         "PSF_TABLE": PSF3D,
@@ -633,6 +673,8 @@ PRODUCT_MODELS.update(
         "BKG_2D": Background2D,
         "BKG_3D": Background3D,
         "RAD_MAX_2D": RadMax2D,
+        "observation_metadata": ObservationMetaData,
+        "map": Map,
         "MapDataset": MapDataset,
         "SpectrumDataset": SpectrumDataset,
     }
