@@ -15,6 +15,7 @@ from astropy.time import Time
 from astropy.units import Quantity
 from astropy.utils import lazyproperty
 import matplotlib.pyplot as plt
+from gammapy.io.core_metadata import HDUListReaderWriter
 from gammapy.irf import FoVAlignment
 from gammapy.utils.coordinates import FoVAltAzFrame, FoVICRSFrame
 from gammapy.utils.deprecation import GammapyDeprecationWarning
@@ -572,21 +573,32 @@ class Observation:
         """
         from gammapy.irf.io import load_irf_dict_from_file
 
-        events = EventList.read(event_file, checksum=checksum)
+        product_dict = HDUListReaderWriter.read(event_file, checksum).to_product_dict()
 
-        gti = GTI.read(event_file, checksum=checksum)
-
-        irf_file = irf_file if irf_file is not None else event_file
-        irf_dict = load_irf_dict_from_file(irf_file)
+        events = product_dict["events"]
+        gti = product_dict["gti"]
 
         obs_info = events.table.meta
+
+        pointing = product_dict.get(
+            "pointing", FixedPointingInfo.from_fits_header(obs_info)
+        )
+
+        if irf_file is None:
+            irf_dict = {
+                k: v
+                for k, v in product_dict.items()
+                if k not in ("events", "gti", "pointing")
+            }
+        else:
+            irf_dict = HDUListReaderWriter.read(irf_file, checksum).to_product_dict()
 
         meta = ObservationMetaData.from_header(obs_info)
         return cls(
             events=events,
             gti=gti,
             obs_id=meta.obs_info.obs_id,
-            pointing=FixedPointingInfo.from_fits_header(obs_info),
+            pointing=pointing,
             meta=meta,
             location=meta.location,
             **irf_dict,
