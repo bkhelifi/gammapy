@@ -15,7 +15,7 @@ from astropy.time import Time
 from astropy.units import Quantity
 from astropy.utils import lazyproperty
 import matplotlib.pyplot as plt
-from gammapy.io.core_metadata import HDUListReaderWriter
+from gammapy.io.core import HDUListReaderWriter
 from gammapy.irf import FoVAlignment
 from gammapy.utils.coordinates import FoVAltAzFrame, FoVICRSFrame
 from gammapy.utils.deprecation import GammapyDeprecationWarning
