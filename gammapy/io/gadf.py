@@ -1,13 +1,13 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 """GADF-specific metadata: column schemas, header models, and reader/writers.
 
-Imports the format-agnostic machinery from ``core_metadata`` and registers
+Imports the format-agnostic machinery from ``core`` and registers
 GADF into the shared registries (``DATA_FORMATS_MODELS``, ``PRODUCT_MODELS``).
 """
 
 import copy
 import logging
-from typing import ClassVar, Literal, Optional, Union
+from typing import ClassVar, Optional, Union
 
 from pydantic import ValidationInfo, model_validator
 
@@ -23,11 +23,13 @@ from gammapy.irf import (
     PSF3D,
     PSFKing,
     RadMax2D,
+    IRFMap,
 )
 from gammapy.maps import Map
 
-# Format-agnostic machinery (adjust the import path to where core_metadata lives).
-from gammapy.io.core_metadata import (
+
+# Format-agnostic machinery (adjust the import path to where core lives).
+from gammapy.io.core import (
     DATA_FORMATS_MODELS,
     DEFAULT_DATA_FORMAT,
     DEFAULT_STRICT_READ,
@@ -38,11 +40,10 @@ from gammapy.io.core_metadata import (
     HDUFields,
     HDUHeader,
     HDUReaderWriter,
+    HDUListReaderWriter,
     HDUResponseFields,
     PRODUCT_MODELS,
     _field_names,
-    _header_key,
-    _hdu_class_key,
 )
 
 log = logging.getLogger(__name__)
@@ -182,6 +183,27 @@ GADF_V02_RAD_MAX_2D_TABLE_DEFINITION = {
     "RAD_MAX": {"dtype": "float", "required": True, "unit": "deg", "ndim": 2},
 }
 
+# --------------------------------------------------------------------------
+# DL4 Map tables
+# --------------------------------------------------------------------------
+GADF_V02_BANDS_TABLE_DEFINITION = {
+    "CHANNEL": {"dtype": "int", "required": True, "unit": "", "ndim": 1},
+    "E_MIN": {"dtype": "float", "required": False, "unit": "keV", "ndim": 1},
+    "E_MAX": {"dtype": "float", "required": False, "unit": "keV", "ndim": 1},
+    "ENERGY": {"dtype": "float", "required": False, "unit": "keV", "ndim": 1},
+    "EVENT_TYPE": {"dtype": "int", "required": False, "unit": "", "ndim": 1},
+}
+
+GADF_V02_WCS_TABLE_DEFINITION = {
+    "NPIX": {"dtype": "int", "required": False, "unit": "", "ndim": 2},
+    "CRPIX": {"dtype": "float", "required": False, "unit": "deg", "ndim": 2},
+    "CDELT": {"dtype": "float", "required": False, "unit": "deg", "ndim": 2},
+}
+
+GADF_V02_HPX_TABLE_DEFINITION = {
+    "NSIDE": {"dtype": "int", "required": True, "unit": "", "ndim": 1},
+}
+
 # --------------- IRF DL3 HDU SPECIFICATION ---------------
 # The key is the class tag.
 GADF_IRF_DL3_HDU_SPECIFICATION = {
@@ -275,6 +297,65 @@ GADF_IRF_DL3_HDU_SPECIFICATION = {
     },
 }
 
+
+GADF_EXTNAME_TO_TAG = {
+    spec["extname"]: tag
+    for tag, spec in GADF_IRF_DL3_HDU_SPECIFICATION.items()
+    if "extname" in spec
+}
+
+
+def resolve_irf_tag_from_meta(meta):
+    hduclas4 = meta.get("HDUCLAS4")
+    if hduclas4 and hduclas4.lower() in GADF_IRF_DL3_HDU_SPECIFICATION:
+        return hduclas4.lower()
+    return GADF_EXTNAME_TO_TAG.get(meta.get("EXTNAME"))
+
+
+def gadf_header_key(meta):
+    key = meta.get("HDUCLAS1") or meta.get("EXTNAME")
+    if key and "BANDS" in key:
+        return "BANDS"
+    # IRF recoverable by EXTNAME -> RESPONSE, so the specific response header is used
+    if key is None or key not in ("EVENTS", "GTI", "POINTING", "RESPONSE"):
+        if resolve_irf_tag_from_meta(meta):
+            return "RESPONSE"
+    return key
+
+
+def gadf_hdu_class_key(meta):
+    from gammapy.irf.io import _get_hdu_type_and_class  # lazy
+
+    key = meta.get("HDUCLAS4") or meta.get("HDUCLAS1") or meta.get("EXTNAME")
+    if key and "BANDS" in key:
+        return "BANDS"
+    if key in PRODUCT_MODELS:
+        return key.upper()
+    tag = None
+    if not meta.get("HDUCLAS4"):  # only guess from EXTNAME if HDUCLAS4 missing
+        tag = GADF_EXTNAME_TO_TAG.get(meta.get("EXTNAME"))
+    if tag:
+        return GADF_IRF_DL3_HDU_SPECIFICATION[tag]["mandatory_keywords"][
+            "HDUCLAS4"
+        ].upper()
+
+    hdu_class = meta.get("HDUCLAS2", "unknown_clas")
+    if hdu_class in ["EFF_AREA", "RPSF", "EDISP", "BKG"] and meta.get("HDUCLAS4"):
+        _, hdu_class = _get_hdu_type_and_class(meta)  # CTA-1DC -> bkg_3d
+    return hdu_class.upper()
+
+    # # EXTNAME -> tag fallback (HDUCLAS4 absent)
+    # tag = resolve_irf_tag_from_meta(meta)
+    # if tag and tag in GADF_IRF_DL3_HDU_SPECIFICATION:
+    #     return GADF_IRF_DL3_HDU_SPECIFICATION[tag]["mandatory_keywords"]["HDUCLAS4"].upper()
+
+    # # CTA-1DC workaround: HDUCLAS2 is a known IRF type but HDUCLAS4 is non-standard
+    # hdu_class = meta.get("HDUCLAS2", "unknown_clas")
+    # if hdu_class in ["EFF_AREA", "RPSF", "EDISP", "BKG"] and meta.get("HDUCLAS4"):
+    #     _, hdu_class = _get_hdu_type_and_class(meta)
+    # return hdu_class.upper()
+
+
 GADF_IRF_MAP_HDU_SPECIFICATION = {
     "edisp_kernel_map": "edisp",
     "edisp_map": "edisp",
@@ -299,6 +380,9 @@ _GADF_V02_TABLE = {
     "BKG_2D": GADF_V02_BKG_2D_TABLE_DEFINITION,
     "BKG_3D": GADF_V02_BKG_3D_TABLE_DEFINITION,
     "RAD_MAX_2D": GADF_V02_RAD_MAX_2D_TABLE_DEFINITION,
+    "BANDS": GADF_V02_BANDS_TABLE_DEFINITION,
+    "IMAGE": GADF_V02_WCS_TABLE_DEFINITION,
+    "SKYMAP": GADF_V02_HPX_TABLE_DEFINITION,
 }
 
 _GADF_V03_TABLE = copy.deepcopy(_GADF_V02_TABLE)
@@ -321,7 +405,14 @@ GADF_HDUDOC = {
 # =====================================================================
 
 # Common non-pointing EVENTS keywords, identical across v0.2 and v0.3.
-_EVENTS_COMMON = {
+_HDU_COMMON = {
+    "HDUCLASS",
+    "HDUDOC",
+    "HDUVERS",
+    "HDUCLAS1",
+}
+
+_EVENTS_COMMON = _HDU_COMMON | {
     "HDUCLASS",
     "HDUDOC",
     "HDUVERS",
@@ -340,16 +431,20 @@ _EVENTS_COMMON = {
     "CREATOR",
 }
 
+_IRF_COMMON = _HDU_COMMON | {"HDUCLAS2", "HDUCLAS3", "HDUCLAS4"}
+
 GADF_HEADER_REQUIRED = {
     "0.2": {
         # v0.2: RA_PNT/DEC_PNT unconditionally mandatory; OBS_MODE NOT required;
         #       no ALT_PNT/AZ_PNT, no DRIFT support.
         "EVENTS": _EVENTS_COMMON | {"RA_PNT", "DEC_PNT"},
+        "RESPONSE": _IRF_COMMON,
     },
     "0.3": {
         # v0.3: OBS_MODE required; RA_PNT/DEC_PNT and ALT_PNT/AZ_PNT are conditional
         #       (see GADF_HEADER_CONDITIONAL_REQUIRED), so NOT in the static set.
         "EVENTS": _EVENTS_COMMON | {"OBS_MODE"},
+        "RESPONSE": _IRF_COMMON,
     },
 }
 
@@ -398,14 +493,47 @@ class GADFObsFields(BaseModel):
 
 # --------------- GADF BASE HEADER ---------------
 class GADFHDUHeader(HDUFields, HDUHeader):
-    HDUCLASS: Literal["GADF"] = "GADF"
+    HDUCLASS: Optional[str] = "GADF"
     HDUVERS: Optional[str] = GADF_DEFAULT_VERSION
+
+    def _tag_from_extname(self, extras=None):
+        extname = self._resolve("EXTNAME", extras)
+        for tag, spec in GADF_IRF_DL3_HDU_SPECIFICATION.items():
+            if spec.get("extname") == extname:
+                return tag
+        return None
+
+    def _irf_tag(self, extras=None):
+        hduclas4 = self._resolve("HDUCLAS4", extras)
+        return hduclas4.lower() if hduclas4 else self._tag_from_extname(extras)
+
+    def _resolve_key(self, extras=None):
+        """RESPONSE if HDUCLAS1 says so, or if an IRF tag is identifiable by EXTNAME."""
+        key = self._resolve("HDUCLAS1", extras)
+        if key:
+            return key
+        if self._tag_from_extname(extras) is not None:
+            return "RESPONSE"
+        return key
+
+    def _check_extra_required(self, version, extras=None):
+        """Tag-specific IRF keywords.
+
+        The common IRF keywords come from HEADER_REQUIRED["RESPONSE"] via
+        _resolve_key; here we only add the per-tag mandatory keywords.
+        """
+        tag = self._irf_tag(extras)
+        if tag is None:
+            return []
+        extra_fields = GADF_IRF_TAG_REQUIRED_FIELDS.get(tag, {})
+        return [k for k in extra_fields if not self._present_in_file(k, extras)]
 
     @model_validator(mode="after")
     def _enforce_gadf(self, info: ValidationInfo):
         strict = (info.context or {}).get("strict", False)
-        if self.HDUVERS is not None and self.HDUVERS not in GADF_HDUDOC:
-            msg = f"Non-standard HDUVERS {self.HDUVERS!r}; known: {list(GADF_HDUDOC)}"
+        hduvers = self._resolve("HDUVERS", (info.context or {}).get("extras", {}))
+        if hduvers is not None and hduvers not in GADF_HDUDOC:
+            msg = f"Non-standard HDUVERS {hduvers!r}; known: {list(GADF_HDUDOC)}"
             if strict:
                 raise ValueError(msg)
             log.warning(msg)
@@ -424,7 +552,7 @@ class GADFEventsHeader(
     GADFEarthLocationFields,
     GADFPointingFields,
 ):
-    HDUCLAS1: Literal["EVENTS"] = "EVENTS"
+    HDUCLAS1: Optional[str] = "EVENTS"
 
     REQUIRED: ClassVar[frozenset] = _field_names(
         HDUFields,
@@ -472,25 +600,24 @@ class GADFEventsHeader(
 
 # --------------- GADF GTI / POINTING HEADERS ---------------
 class GADFGTIHeader(GADFHDUHeader, FitsTimeFields, FitsTimeConvenienceFields):
-    HDUCLAS1: Literal["GTI"] = "GTI"
-    REQUIRED: ClassVar[frozenset] = _field_names(HDUFields, FitsTimeFields)
+    HDUCLAS1: Optional[str] = "GTI"
+    REQUIRED: ClassVar[frozenset] = _field_names(FitsTimeFields)
 
 
 class GADFPointingHeader(GADFHDUHeader, FitsTimeFields, FitsTimeConvenienceFields):
-    HDUCLAS1: Literal["POINTING"] = "POINTING"
-    REQUIRED: ClassVar[frozenset] = _field_names(HDUFields, FitsTimeFields)
+    HDUCLAS1: Optional[str] = "POINTING"
+    REQUIRED: ClassVar[frozenset] = _field_names(FitsTimeFields)
 
 
 # --------------- GADF IRF HEADER ---------------
 GADF_IRF_TAG_REQUIRED_FIELDS = {
-    "aeff_2d": ["LO_THRES", "HI_THRES"],
     "bkg_2d": ["FOVALIGN"],
     "bkg_3d": ["FOVALIGN"],
 }
 
 
 class GADFResponseHeader(GADFHDUHeader, HDUResponseFields, GeneralFields):
-    HDUCLAS1: Literal["RESPONSE"] = "RESPONSE"
+    HDUCLAS1: Optional[str] = "RESPONSE"
     EXTNAME: Optional[str] = None
     REQUIRED: ClassVar[frozenset] = _field_names(HDUFields, HDUResponseFields) | {
         "EXTNAME"
@@ -501,16 +628,6 @@ class GADFResponseHeader(GADFHDUHeader, HDUResponseFields, GeneralFields):
     HI_THRES: Optional[float] = None
     FOVALIGN: Optional[str] = None
 
-    def validate_for_tag(self, tag):
-        missing = [
-            key
-            for key in GADF_IRF_TAG_REQUIRED_FIELDS.get(tag, [])
-            if getattr(self, key) is None
-        ]
-        if missing:
-            raise ValueError(f"IRF tag {tag!r} requires {missing} but they are unset.")
-        return self
-
     @classmethod
     def from_tag(cls, tag, **overrides):
         if tag not in GADF_IRF_DL3_HDU_SPECIFICATION:
@@ -519,7 +636,7 @@ class GADFResponseHeader(GADFHDUHeader, HDUResponseFields, GeneralFields):
             )
         spec = GADF_IRF_DL3_HDU_SPECIFICATION[tag]
         kwargs = {"EXTNAME": spec["extname"], **spec["mandatory_keywords"], **overrides}
-        return cls.from_header(kwargs)
+        return cls.from_meta(kwargs)
 
     def apply_tag(self, tag):
         spec = GADF_IRF_DL3_HDU_SPECIFICATION[tag]
@@ -530,15 +647,53 @@ class GADFResponseHeader(GADFHDUHeader, HDUResponseFields, GeneralFields):
         return self
 
 
+# --------------- GADF DL4 HEADERS ---------------
+class GADFBandsHeader(GADFHDUHeader):
+    HDUCLAS1: Optional[str] = "BANDS"
+    REQUIRED: ClassVar[frozenset] = frozenset()
+
+
+class GADFWcsSkymapHeader(GADFHDUHeader):
+    HDUCLAS1: Optional[str] = "IMAGE"
+    BANDSHDU: Optional[str] = None  # name of the companion BANDS HDU
+    REQUIRED: ClassVar[frozenset] = frozenset()  # WCS map compliance = valid WCS cards
+
+
+class GADFHpxSkymapHeader(GADFHDUHeader):
+    HDUCLAS1: Optional[str] = "SKYMAP"
+    PIXTYPE: Optional[str] = "HEALPIX"
+    ORDERING: Optional[str] = None  # NESTED | RING
+    INDXSCHM: Optional[str] = None  # IMPLICIT | EXPLICIT | SPARSE (default IMPLICIT)
+    ORDER: Optional[int] = None  # log2(NSIDE) or -1
+    NSIDE: Optional[int] = None  # superseded by NSIDE column if BANDS defined
+    COORDSYS: Optional[str] = None  # CEL | GAL
+    BANDSHDU: Optional[str] = None
+    REQUIRED: ClassVar[frozenset] = frozenset({"PIXTYPE"})  # per spec, must be HEALPIX
+
+
 GADF_HEADER_MODELS = {
+    "BASE": GADFHDUHeader,
     "EVENTS": GADFEventsHeader,
     "GTI": GADFGTIHeader,
     "POINTING": GADFPointingHeader,
     "RESPONSE": GADFResponseHeader,
+    "BANDS": GADFBandsHeader,
+    "IMAGE": GADFWcsSkymapHeader,
+    "SKYMAP": GADFHpxSkymapHeader,
 }
 
 
 # --------------- GADF READER/WRITERS ---------------
+
+
+class GADFHDUReaderWriter(HDUReaderWriter):
+    """IO class specialised to the GADF HDU."""
+
+    DEFAULT_HDU = None
+    GADF_HEADER_MODEL = None
+    format = "GADF"
+
+
 class GADFEventsReaderWriter(HDUReaderWriter):
     """IO class specialised to the EVENTS HDU."""
 
@@ -551,7 +706,7 @@ class GADFEventsReaderWriter(HDUReaderWriter):
         cls, eventlist, version=GADF_DEFAULT_VERSION, strict=DEFAULT_STRICT_READ
     ):
         table = eventlist.table
-        header = cls.GADF_HEADER_MODEL.from_header(table.meta, strict)
+        header = cls.GADF_HEADER_MODEL.from_meta(table.meta, strict)
         cls.format_validator(header, table, cls.format, version, strict)
         return cls(
             table=table, header=header, data=None, hdu=cls.DEFAULT_HDU, version=version
@@ -559,7 +714,7 @@ class GADFEventsReaderWriter(HDUReaderWriter):
 
     def to_pointing(self):
         """Build FixedPointingInfo."""
-        return FixedPointingInfo.from_fits_header(self.header.to_header())
+        return FixedPointingInfo.from_fits_header(self.header.to_meta())
 
 
 class GADFGTIReaderWriter(HDUReaderWriter):
@@ -602,12 +757,12 @@ class GADFResponseReaderWriter(HDUReaderWriter):
             cls.table_validator(tag.upper(), version=version).run(table)
         spec = GADF_IRF_DL3_HDU_SPECIFICATION[tag]
         meta = {**dict(getattr(irf, "meta", {}) or {}), **spec["mandatory_keywords"]}
-        header = cls.GADF_HEADER_MODEL.from_header(meta, strict)
+        header = cls.GADF_HEADER_MODEL.from_meta(meta, strict)
         return cls(
             table=table,
             header=header,
             data=None,
-            hdu=_hdu_class_key(meta),
+            hdu=gadf_hdu_class_key(meta),
             format=cls.format,
             version=version,
         )
@@ -629,7 +784,7 @@ class GADFPointingReaderWriter(HDUReaderWriter):
         header_dict = dict(
             fpi.to_fits_header(format=cls.format.lower(), version=version)
         )
-        header = cls.GADF_HEADER_MODEL.from_header(
+        header = cls.GADF_HEADER_MODEL.from_meta(
             header_dict, strict=strict, version=version
         )
         return cls(
@@ -651,13 +806,15 @@ GADF_READER_WRITER_MODELS = {
 
 
 # --------------- REGISTRY INJECTION ---------------
-# Populate the shared registries owned by core_metadata.
+# Populate the shared registries owned by core.
 DATA_FORMATS_MODELS["GADF"] = {
     "TABLE": GADF_PRODUCTS_TABLE_DEFINITION,
     "HEADER": GADF_HEADER_MODELS,
     "HEADER_REQUIRED": GADF_HEADER_REQUIRED,  # version -> hdu -> set
     "HEADER_CONDITIONAL_REQUIRED": GADF_HEADER_CONDITIONAL_REQUIRED,  # version -> hdu -> rules
     "READER_WRITER": GADF_READER_WRITER_MODELS,
+    "HEADER_KEY": gadf_header_key,
+    "HDU_CLASS_KEY": gadf_hdu_class_key,
 }
 
 PRODUCT_MODELS.update(
@@ -673,9 +830,73 @@ PRODUCT_MODELS.update(
         "BKG_2D": Background2D,
         "BKG_3D": Background3D,
         "RAD_MAX_2D": RadMax2D,
+        "AEFF_BANDS": IRFMap,
+        "PSF_BANDS": IRFMap,
+        "EDISP_BANDS": IRFMap,
+        "PSF_MAP": IRFMap,
+        # "IMAGE": Map,
+        # "BANDS": Map,
+        # "SKYMAP": Map,
         "observation_metadata": ObservationMetaData,
         "map": Map,
         "MapDataset": MapDataset,
         "SpectrumDataset": SpectrumDataset,
     }
 )
+
+
+class GADFHDUListReaderWriter(HDUListReaderWriter):
+    """GADF-aware file reader: framework validation + gammapy Map reconstruction."""
+
+    @classmethod
+    def read(cls, filename, *args, **kwargs):
+        obj = super().read(filename, *args, **kwargs)
+        obj._filename = filename
+        return obj
+
+    def _skymap_keys(self):
+        keys = []
+        for key, rw in self.hdu_dict.items():
+            if key == "PRIMARY":
+                continue
+            hdr = rw.header.to_meta()
+            if (
+                hdr.get("PIXTYPE") == "HEALPIX"
+                or hdr.get("HDUCLAS1") in ("SKYMAP", "IMAGE")
+                or "CTYPE1" in hdr
+            ):
+                keys.append(key)
+        if len(keys) == 0:
+            extname = self.hdu_dict["PRIMARY"].header.to_meta().get("EXTNAME", None)
+            if extname:
+                keys.append(extname)
+        return keys
+
+    def to_map(self, hdu=None, hdu_class=None):
+        from gammapy.maps import Map
+
+        if getattr(self, "_filename", None) is None:
+            raise ValueError("to_map requires the source filename (read from file).")
+        if hdu is None:
+            keys = self._skymap_keys()
+            if len(keys) != 1:
+                raise ValueError(f"Specify hdu; SKYMAP HDUs found: {keys}")
+            hdu = keys[0]
+        try:
+            from gammapy.irf import IRF_REGISTRY
+
+            cls = IRF_REGISTRY.get_cls(hdu_class)
+            return cls.read(self._filename, hdu=hdu.lower())
+        except Exception as e:
+            log.warning(
+                "IRF reconstruction failed for hdu=%r, hdu_class=%r (%s: %s); "
+                "falling back to Map.read.",
+                hdu,
+                hdu_class,
+                type(e).__name__,
+                e,
+            )
+        return Map.read(self._filename, hdu=hdu)
+
+    def to_maps(self):
+        return {key: self.to_map(hdu=key) for key in self._skymap_keys()}
