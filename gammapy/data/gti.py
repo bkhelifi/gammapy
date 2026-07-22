@@ -163,6 +163,29 @@ class GTI:
             return cls.from_table_hdu(gti_hdu, format=format)
 
     @classmethod
+    def from_table(cls, table, format="gadf"):
+        """Read from table HDU.
+
+        Parameters
+        ----------
+        table : `~astropy.io.fits.BinTableHDU`
+            table hdu.
+        format : {"gadf"}
+            Input format, currently only "gadf" is supported. Default is "gadf".
+        """
+        if format != "gadf":
+            raise ValueError(f'Only the "gadf" format supported, got {format}')
+
+        time_ref = time_ref_from_dict(table.meta, format="mjd", scale="tt")
+
+        # Check if TIMEUNIT keyword is present, otherwise assume seconds
+        unit = table.meta.pop("TIMEUNIT", "s")
+        start = u.Quantity(table["START"], unit)
+        stop = u.Quantity(table["STOP"], unit)
+
+        return cls.create(start, stop, time_ref)
+
+    @classmethod
     def from_table_hdu(cls, table_hdu, format="gadf"):
         """Read from table HDU.
 
@@ -177,14 +200,8 @@ class GTI:
             raise ValueError(f'Only the "gadf" format supported, got {format}')
 
         table = Table.read(table_hdu)
-        time_ref = time_ref_from_dict(table.meta, format="mjd", scale="tt")
 
-        # Check if TIMEUNIT keyword is present, otherwise assume seconds
-        unit = table.meta.pop("TIMEUNIT", "s")
-        start = u.Quantity(table["START"], unit)
-        stop = u.Quantity(table["STOP"], unit)
-
-        return cls.create(start, stop, time_ref)
+        return cls.from_table(table, format="gadf")
 
     def to_table_hdu(self, format="gadf"):
         """

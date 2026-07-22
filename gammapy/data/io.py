@@ -31,9 +31,8 @@ class EventListReader:
         self.checksum = checksum
 
     @staticmethod
-    def from_gadf_hdu(events_hdu):
-        """Create EventList from gadf HDU."""
-        table = Table.read(events_hdu)
+    def from_table(table):
+        """Create EventList from gadf HDU table."""
         meta = EventListMetaData.from_header(table.meta)
 
         # This is not a strict check on input. It just checks that required information is there.
@@ -62,6 +61,13 @@ class EventListReader:
                 new_table.add_column(table[name])
 
         return EventList(new_table, meta)
+
+    @classmethod
+    def from_gadf_hdu(cls, events_hdu):
+        """Create EventList from gadf HDU."""
+        table = Table.read(events_hdu)
+
+        return cls.from_table(table)
 
     @staticmethod
     def identify_format_from_hduclass(events_hdu):
