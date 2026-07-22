@@ -144,13 +144,23 @@ class TableValidator(MutableMapping):
 
     def run(self, table):
         """Validate a table against the definition; returns the table."""
+        errors = []
         for key in self.required_columns:
             if key not in table.colnames:
-                raise KeyError(f"Missing required column: {key!r}")
-            self[key].validate_column(table[key])
+                errors.append(f"missing required column {key!r}")
+                continue
+            try:
+                self[key].validate_column(table[key])
+            except (TypeError, UnitTypeError) as e:
+                errors.append(f"{key}: {e}")
         for key in self.optional_columns:
             if key in table.colnames:
-                self[key].validate_column(table[key])
+                try:
+                    self[key].validate_column(table[key])
+                except (TypeError, UnitTypeError) as e:
+                    errors.append(f"{key}: {e}")
+        if errors:
+            raise ValueError("; ".join(errors))
         return table
 
     def to_table(self, include_optional=None):
