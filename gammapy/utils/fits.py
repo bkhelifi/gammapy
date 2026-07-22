@@ -78,40 +78,28 @@ class HDULocation:
         hdu_list = fits.open(str(filename), memmap=False)
         return hdu_list[self.hdu_name]
 
+    # TO-DO: add data format option
     def load(self):
-        """Load HDU as appropriate class."""
+        """Load HDU as appropriate class. Uses GADF by default."""
         from gammapy.irf import IRF_REGISTRY
+        from gammapy.io.gadf import GADFHDUListReaderWriter
 
         hdu_class = self.hdu_class
         filename = self.path()
         hdu = self.hdu_name
-
-        if hdu_class == "events":
-            from gammapy.data import EventList
-
-            return EventList.read(filename, hdu=hdu)
-        elif hdu_class == "gti":
-            from gammapy.data.gti import GTI
-
-            return GTI.read(filename, hdu=hdu)
-        elif hdu_class == "map":
-            from gammapy.maps import Map
-
-            return Map.read(filename, hdu=hdu, format=self.format)
-        elif hdu_class == "pointing":
-            # FIXME: support loading the pointing table
-            from gammapy.data import FixedPointingInfo
-
-            return FixedPointingInfo.read(filename, hdu=hdu)
+        rw = GADFHDUListReaderWriter.read(filename)
+        product_dict = rw.to_product_dict()
+        if hdu_class in product_dict.keys():
+            return product_dict[hdu_class]
+        elif "map" in hdu_class:
+            return rw.to_map(hdu_class=hdu_class)
         elif hdu_class == "observation_metadata":
             from gammapy.data import ObservationMetaData
 
-            with fits.open(filename) as hdulist:
-                header = hdulist[hdu].header
-                return ObservationMetaData.from_header(header)
-        else:
+            meta = rw.hdu_dict["EVENTS"].header.to_meta()
+            return ObservationMetaData.from_header(meta)
+        else:  # This should have been resolved by GADFHDUListReader, but I leave it in case of missing use cases.
             cls = IRF_REGISTRY.get_cls(hdu_class)
-
             return cls.read(filename, hdu=hdu)
 
 
